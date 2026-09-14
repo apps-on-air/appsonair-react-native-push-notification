@@ -20,11 +20,28 @@ By default this example resolves the **published** native SDKs (`0.0.2-alpha`) �
 JitPack on Android, the CocoaPods trunk on iOS — so it exercises exactly the
 dependency path a host app gets. Nothing extra to set up.
 
-**Android also needs Firebase.** Drop your `google-services.json` into
-`android/app/` and apply the Google Services plugin — the native SDK uses FCM and
-will not produce a token without it. iOS uses APNs directly and needs no
-equivalent, but does need the Push Notifications capability on the target and an
-`AppsonairAppId` entry in `Info.plist`.
+Two things are checked in as **placeholders**, and the app will build but not
+receive anything until you replace them with your own:
+
+| Where | Placeholder | Replace with |
+|---|---|---|
+| `android/app/src/main/AndroidManifest.xml` | `AppsonairAppId` = `your-appsonair-app-id` | your AppsOnAir app id |
+| `ios/AppsOnAirPushExample/Info.plist` | `AppsonairAppId` = `your-appsonair-app-id` | your AppsOnAir app id |
+
+**Android also needs Firebase.** `android/app/google-services.json` is a **stub**
+— valid enough for the build and for CI, useless for delivery. Register
+`com.appsonairpushexample` in your own Firebase project, download the real file
+over it, and take care not to commit it back. The native SDK uses FCM and will
+not produce a token without it.
+
+iOS uses APNs directly, so it needs no Firebase file — but it does need the Push
+Notifications capability on the target and a real `AppsonairAppId` in
+`Info.plist`.
+
+**Release builds run R8.** `enableProguardInReleaseBuilds` is on, unlike the
+stock React Native template, so `./gradlew :app:assembleRelease` exercises the
+minified path that a real published app takes. CI builds it on every push — an
+AAR is never minified itself, so this is the only place stripping shows up.
 
 ## Install
 

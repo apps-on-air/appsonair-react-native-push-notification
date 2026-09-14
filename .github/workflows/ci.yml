@@ -34,6 +34,12 @@ jobs:
       - name: 🧹 lint
         run: npm run lint
 
+      # Mounts the example against the real src/index.tsx with a stubbed native
+      # module, so a library that throws on import fails here rather than on a
+      # device.
+      - name: 🧪 test
+        run: npm test --workspace AppsOnAirPushExample
+
       # Rebuilds from a clean lib/ so a stale artifact cannot mask a build break.
       - name: 🏗️ build
         run: npm run clean && npm run prepare
@@ -89,10 +95,8 @@ jobs:
       - name: 📦 install
         run: npm ci
 
-      # google-services.json is per-developer and never committed, so the app
-      # module cannot be assembled here. Building the library module alone still
-      # compiles the Kotlin bridge against the published Push SDK -- which is the
-      # part that breaks.
+      # Compiles the Kotlin bridge against the published Push SDK on both
+      # architectures -- the part most likely to break on an SDK bump.
       - name: 🤖 assemble the library (new arch)
         working-directory: example/android
         run: ./gradlew :appsonair-react-native-push:assembleRelease -PnewArchEnabled=true
@@ -100,3 +104,14 @@ jobs:
       - name: 🤖 assemble the library (old arch)
         working-directory: example/android
         run: ./gradlew :appsonair-react-native-push:assembleRelease -PnewArchEnabled=false
+
+      # R8 only ever runs in an application build -- an AAR is published
+      # unminified -- so a library stripped by a consumer's release build cannot
+      # be caught by assembling the library. The example's release build turns
+      # minification on for exactly this reason, and it is signed with the
+      # committed debug keystore and built against a stub google-services.json,
+      # so nothing secret is needed to run it. One ABI keeps it quick; R8 is
+      # architecture-independent.
+      - name: 🤖 assemble the example app (release, R8 on)
+        working-directory: example/android
+        run: ./gradlew :app:assembleRelease -PnewArchEnabled=true -PreactNativeArchitectures=arm64-v8a

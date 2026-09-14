@@ -70,12 +70,6 @@ jobs:
   android:
     name: 🤖 android
     runs-on: ubuntu-latest
-    # Non-blocking until the native SDK is actually served by JitPack -- the
-    # compile classpath cannot resolve
-    # com.github.apps-on-air:appsonair-android-push-notification until then, and
-    # a red job on every PR is noise rather than signal. Delete this line once
-    # the artifact is live; the job is meant to block after that.
-    continue-on-error: true
     steps:
       - name: 📚 checkout
         uses: actions/checkout@v4

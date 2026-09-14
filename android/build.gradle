@@ -98,6 +98,25 @@ android {
 
   kotlinOptions {
     jvmTarget = "17"
+
+    // WORKAROUND -- remove once the native SDK is republished.
+    //
+    // appsonair-android-push-notification:0.0.2-alpha is compiled with Kotlin
+    // 2.2.10 and sets no languageVersion/apiVersion floor, so its classes carry
+    // metadata 2.2.0. React Native pins the Kotlin compiler per release -- 1.9.24
+    // on RN 0.76, 2.0.21 on 0.77-0.78, 2.1.x on 0.79-0.81 -- and none of those can
+    // read metadata 2.2.0, so compiling this module against the AAR fails with:
+    //
+    //   Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin.
+    //   The actual metadata version is 2.2.0, but the compiler version 1.9.0 can
+    //   read versions up to 2.0.0.
+    //
+    // Raising the host's Kotlin version is not an option: KGP 2.2 breaks React
+    // Native's own Gradle plugin ("Found interface KotlinTopLevelExtension, but
+    // class was expected"). The real fix is upstream -- the SDK needs
+    // `languageVersion = "1.9"` and `apiVersion = "1.9"` in its kotlinOptions --
+    // at which point this flag and the stdlib pin below both go away.
+    freeCompilerArgs += ["-Xskip-metadata-version-check"]
   }
 
   // The architecture-specific module class. Both source sets declare the same
@@ -127,7 +146,24 @@ dependencies {
   // Gradle plugin rewrites it to com.facebook.react:react-android:$version.
   //noinspection GradleDynamicVersion
   implementation "com.facebook.react:react-native:+"
-  implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+
+  // `strictly`, not a plain version -- the second half of the Kotlin 2.2.10
+  // workaround documented in kotlinOptions above.
+  //
+  // The SDK's POM requires kotlin-stdlib:2.2.10, and conflict resolution carries
+  // that onto the *host app's* compileClasspath (1.9.24 -> 2.2.10), so the app's
+  // own Kotlin then fails to compile even though nothing in the app touches the
+  // SDK. `-Xskip-metadata-version-check` cannot help there: it applies to this
+  // module, not to the consumer's. Pinning the stdlib back to whatever Kotlin the
+  // host is actually compiling with keeps the app buildable.
+  //
+  // The cost: the SDK was compiled against the 2.2.10 stdlib and now runs against
+  // an older one, so any stdlib API it uses that postdates the host's Kotlin
+  // throws NoSuchMethodError at runtime. That risk is the reason this is a
+  // stopgap and not a design -- it disappears with the upstream fix.
+  implementation("org.jetbrains.kotlin:kotlin-stdlib") {
+    version { strictly kotlin_version }
+  }
 
   // The native AppsOnAir Push SDK, from JitPack -- the host app must have
   // maven { url 'https://jitpack.io' } in its repositories. The coordinate stays

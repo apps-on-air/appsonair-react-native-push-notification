@@ -52,7 +52,7 @@ Autolinking does the rest — nothing to add to `MainApplication.kt` or `AppDele
 | React Native | 0.71+ |
 | iOS | 15.0+ |
 | Android | minSdk 24 |
-| Kotlin | 1.9+ |
+| Kotlin | 1.9+ (whatever your RN version pins — see below) |
 
 ---
 
@@ -214,14 +214,42 @@ any FCM app. `POST_NOTIFICATIONS` (Android 13+) is requested for you by
 `requestPermission()`.
 
 <details>
+<summary><b>Kotlin version</b> — why this package pins the stdlib, and what to do if your app still fails to compile</summary>
+
+The published native SDK (`0.0.2-alpha`) is compiled with **Kotlin 2.2.10** and
+sets no `languageVersion` floor, so its classes carry metadata `2.2.0`. No React
+Native release ships a Kotlin compiler that can read that — 0.76 pins 1.9.24,
+0.77–0.78 pin 2.0.21, 0.79–0.81 pin 2.1.x — and raising your app's Kotlin to 2.2
+is not a fix either: KGP 2.2 breaks React Native's own Gradle plugin with
+`Found interface KotlinTopLevelExtension, but class was expected`.
+
+This package works around it in `android/build.gradle` so you don't have to:
+`-Xskip-metadata-version-check` lets this module read the SDK's classes, and a
+`strictly` pin holds `kotlin-stdlib` at your app's Kotlin version — without that
+second half the SDK drags stdlib 2.2.10 onto **your app's** compile classpath and
+your own Kotlin stops compiling.
+
+If your app still fails with `Module was compiled with an incompatible version of
+Kotlin`, something else on your classpath is pulling the newer stdlib back in.
+Check with:
+
+```sh
+cd android && ./gradlew :app:dependencies --configuration debugCompileClasspath | grep kotlin-stdlib
+```
+
+Both workarounds are temporary; they go away when the SDK republishes with an
+older language version.
+</details>
+
+<details>
 <summary><b>Overriding the Push SDK coordinate</b> — for a local build or a private repo</summary>
 
 This package pins the released SDK. To point at something else, set the coordinate
 from your app's `android/gradle.properties` — no need to patch this package:
 
 ```properties
-# The default. The `v` prefix is the JitPack tag's, not a different release.
-AppsonairReactNativePush_pushSdkCoordinate=com.github.apps-on-air:appsonair-android-push-notification:v0.0.2-alpha
+# The default.
+AppsonairReactNativePush_pushSdkCoordinate=com.github.apps-on-air:appsonair-android-push-notification:0.0.2-alpha
 ```
 </details>
 

@@ -1,0 +1,51 @@
+buildscript {
+    ext {
+        buildToolsVersion = "35.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 35
+        targetSdkVersion = 34
+        ndkVersion = "26.1.10909125"
+        kotlinVersion = "1.9.24"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        // Turns google-services.json into the string resources that
+        // FirebaseApp.initializeApp() reads. Applied conditionally in
+        // app/build.gradle, since the JSON is per-developer and not committed.
+        classpath("com.google.gms:google-services:4.4.2")
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"
+
+allprojects {
+    // JitPack serves the AppsOnAir Push SDK and AppsOnAir Core. It is also what
+    // the `:push` project needs when the local-SDK opt-in below is on: that
+    // project normally inherits repositories from its own repo's
+    // dependencyResolutionManagement block, which does not apply here.
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+}
+
+// --- Local native SDK wiring (opt-in, for SDK development) -------------------
+// Only active when settings.gradle mapped the sibling SDK checkout in, i.e. with
+// -PappsonairLocalSdk=true. The module selector carries no version, so it matches
+// whatever coordinate the wrapper pins.
+if (findProject(':push') != null) {
+    allprojects {
+        configurations.all {
+            resolutionStrategy.dependencySubstitution {
+                substitute module('com.github.apps-on-air:appsonair-android-push-notification') using project(':push')
+            }
+        }
+    }
+}

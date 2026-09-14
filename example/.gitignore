@@ -59,6 +59,12 @@ yarn-error.log
 **/Pods/
 /vendor/bundle/
 
+# Podfile.lock is not tracked for this example: it pins React Native's pods to
+# whichever architecture the last `pod install` ran with (RCT_NEW_ARCH_ENABLED),
+# so it churns on every arch switch, and it cannot record AppsOnAir-AppPush
+# honestly while the pod is resolved from a local path.
+ios/Podfile.lock
+
 # Temporary files created by Metro to check the health of the file watcher
 .metro-health-check*
 

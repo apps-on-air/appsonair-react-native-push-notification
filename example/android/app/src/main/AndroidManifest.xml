@@ -22,8 +22,10 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
-        <meta-data
-        android:name="AppsonairAppId"
-        android:value="bb3bb11f-8af9-4197-b1ea-d725baaf6ba7" />
+
+      <!-- Replace with your own AppsOnAir app id before running. -->
+      <meta-data
+          android:name="AppsonairAppId"
+          android:value="your-appsonair-app-id" />
     </application>
 </manifest>

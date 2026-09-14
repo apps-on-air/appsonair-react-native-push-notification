@@ -25,7 +25,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>AppsonairAppId</key>
-	<string>869ce67f-0122-4f96-b387-93bb544c3f3e</string>
+	<string>your-appsonair-app-id</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 	  <!-- Do not change NSAllowsArbitraryLoads to true, or you will risk app rejection! -->

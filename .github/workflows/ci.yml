@@ -1,0 +1,108 @@
+name: '✅ ci'
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: ✅ verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📚 checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      # `npm ci` also runs `prepare` (bob build), so the library is built here.
+      - name: 📦 install
+        run: npm ci
+
+      - name: 🔎 typecheck
+        run: npm run typecheck
+
+      - name: 🧹 lint
+        run: npm run lint
+
+      # Rebuilds from a clean lib/ so a stale artifact cannot mask a build break.
+      - name: 🏗️ build
+        run: npm run clean && npm run prepare
+
+      # Fails the job if the tarball would ship without the native sources --
+      # the podspec, the Android module or the iOS bridge going missing from
+      # `files` is invisible until someone installs the package.
+      - name: 📋 verify package contents
+        run: |
+          npm pack --dry-run --json > pack.json
+          node -e "
+            const files = require('./pack.json')[0].files.map((f) => f.path);
+            const required = [
+              'appsonair-react-native-push.podspec',
+              'react-native.config.js',
+              'android/build.gradle',
+              'android/src/main/java/com/appsonairreactnativepush/AppsonairReactNativePushModuleImpl.kt',
+              'ios/AppsonairReactNativePush.mm',
+              'ios/AppsonairReactNativePushImpl.swift',
+              'lib/commonjs/index.js',
+              'lib/module/index.js',
+              'lib/typescript/commonjs/src/index.d.ts',
+              'LICENSE',
+              'README.md',
+            ];
+            const missing = required.filter((f) => !files.includes(f));
+            if (missing.length) {
+              console.error('missing from the npm tarball:\n  ' + missing.join('\n  '));
+              process.exit(1);
+            }
+            console.log(files.length + ' files in the tarball, all required paths present');
+          "
+
+  android:
+    name: 🤖 android
+    runs-on: ubuntu-latest
+    # Non-blocking until the native SDK is actually served by JitPack -- the
+    # compile classpath cannot resolve
+    # com.github.apps-on-air:appsonair-android-push-notification until then, and
+    # a red job on every PR is noise rather than signal. Delete this line once
+    # the artifact is live; the job is meant to block after that.
+    continue-on-error: true
+    steps:
+      - name: 📚 checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: ☕ jdk
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 📦 install
+        run: npm ci
+
+      # google-services.json is per-developer and never committed, so the app
+      # module cannot be assembled here. Building the library module alone still
+      # compiles the Kotlin bridge against the published Push SDK -- which is the
+      # part that breaks.
+      - name: 🤖 assemble the library (new arch)
+        working-directory: example/android
+        run: ./gradlew :appsonair-react-native-push:assembleRelease -PnewArchEnabled=true
+
+      - name: 🤖 assemble the library (old arch)
+        working-directory: example/android
+        run: ./gradlew :appsonair-react-native-push:assembleRelease -PnewArchEnabled=false

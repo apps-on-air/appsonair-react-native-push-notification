@@ -1,0 +1,94 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'AppsOnAirPushExample' do
+  config = use_native_modules!
+
+  # --- Local native SDK wiring (opt-in, for SDK development) ------------------
+  # By default the example resolves AppsOnAir-AppPush 0.0.2-alpha from the
+  # CocoaPods trunk, exactly like a host app does -- the wrapper's podspec
+  # declares it, so nothing is needed here.
+  #
+  # To build against a sibling checkout of the iOS SDK instead:
+  #
+  #   APPSONAIR_LOCAL_SDK=1 npm run pods:new
+  #
+  # A `:path` declaration takes precedence over the wrapper podspec's dependency.
+  if ENV['APPSONAIR_LOCAL_SDK'] == '1'
+    Pod::UI.puts 'AppsOnAir: using the local iOS SDK checkout'.yellow
+    pod 'AppsOnAir-AppPush', :path => '../../../appsonair-ios-push-notification'
+  end
+
+  # Compensates for a missing version floor upstream: AppsOnAir-AppPush.podspec
+  # declares `core.dependency 'AppsOnAir-Core'` with no constraint, while the
+  # SDK's own Package.swift requires `from: "1.2.3"` and its AppsOnAirDeviceInfo
+  # calls AppsOnAirCoreServices.getDeviceMetadata(), which only exists in 1.2.x.
+  # Without this, an existing Podfile.lock happily keeps 1.1.1 and the SDK fails
+  # to compile. Remove once the podspec carries its own floor.
+  pod 'AppsOnAir-Core', '>= 1.2.3'
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  target 'AppsOnAirPushExampleTests' do
+    inherit! :complete
+    # Pods for testing
+  end
+
+  post_install do |installer|
+    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      # :ccache_enabled => true
+    )
+
+    # --- Swift runtime search paths for an ObjC-only app target ---------------
+    # This wrapper, and the AppsOnAir SDKs under it, are Swift static libraries.
+    # This app target has no Swift source of its own (AppDelegate.mm, main.m), so
+    # Xcode does not add the Swift runtime library search paths and the Old
+    # Architecture link fails with:
+    #
+    #   Undefined symbols: __swift_FORCE_LOAD_$_swiftCompatibility56
+    #     referenced from libAppsOnAir-Core.a, libAppsOnAir-AppPush.a,
+    #     libReachabilitySwift.a, libappsonair-react-native-push.a
+    #
+    # The New Architecture links without this only because other Swift-bearing
+    # pods happen to pull the paths in -- which is luck, not design.
+    #
+    # A host app can equivalently fix this by adding any empty .swift file (plus
+    # the bridging header Xcode offers to create) to its own app target. See the
+    # README's iOS section.
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.native_targets.each do |target|
+        target.build_configurations.each do |build_config|
+          build_config.build_settings['LIBRARY_SEARCH_PATHS'] = [
+            '$(inherited)',
+            # DT_TOOLCHAIN_DIR, not TOOLCHAIN_DIR: the latter resolves to the
+            # Metal toolchain under Xcode 26 and the path does not exist.
+            '$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)',
+            '/usr/lib/swift'
+          ]
+        end
+      end
+      aggregate_target.user_project.save
+    end
+  end
+end

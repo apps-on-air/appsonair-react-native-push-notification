@@ -1,0 +1,56 @@
+pluginManagement {
+  // Resolved through Node rather than hard-coded as ../node_modules/... because
+  // this example is an npm workspace: the plugin is hoisted to the repo root, so
+  // the literal path the app template ships does not exist here. require.resolve
+  // finds it wherever the package manager put it -- hoisted or local.
+  //
+  // Stashed on gradle.ext because pluginManagement must be the first block in a
+  // settings script, so the value cannot be computed before it, and the same
+  // path is needed again by the includeBuild at the bottom.
+  gradle.ext.reactNativeGradlePluginDir = new File(
+    providers.exec {
+      commandLine(
+        "node", "--print",
+        "require.resolve('@react-native/gradle-plugin/package.json', { paths: ['${rootDir}'] })"
+      )
+    }.standardOutput.asText.get().trim()
+  ).getParentFile().getAbsolutePath()
+
+  includeBuild(gradle.ext.reactNativeGradlePluginDir)
+}
+
+plugins { id("com.facebook.react.settings") }
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+  ex.autolinkLibrariesFromCommand()
+}
+
+rootProject.name = 'AppsOnAirPushExample'
+include ':app'
+
+// Second inclusion, outside pluginManagement, is what the app template also does.
+// It substitutes the versionless `com.android.tools.build:gradle` and
+// `com.facebook.react:react-native-gradle-plugin` classpath entries in
+// build.gradle; without it both fail to resolve with an empty version.
+includeBuild(gradle.ext.reactNativeGradlePluginDir)
+
+// --- Local native SDK wiring (opt-in, for SDK development) -------------------
+// By default the example resolves the published AAR from JitPack, exactly like a
+// host app does -- the wrapper declares the coordinate in its own build.gradle.
+//
+// To build a sibling checkout of the Android SDK instead:
+//
+//   ./gradlew -PappsonairLocalSdk=true :app:assembleDebug
+//
+// or set `appsonairLocalSdk=true` in this project's gradle.properties. That maps
+// the SDK's `:push` Gradle project in here; ../build.gradle then substitutes it
+// for the `com.github.apps-on-air:appsonair-android-push-notification` coordinate.
+//
+// The SDK's own build reads BASE_URL from `file("../gradle.properties")`
+// relative to its projectDir, which still resolves to its own repo here -- it is
+// written to be consumed cross-repo exactly like this.
+if (providers.gradleProperty('appsonairLocalSdk').getOrElse('false') == 'true') {
+  include ':push'
+  project(':push').projectDir =
+      file('../../../appsonair-push-notification-android/push')
+}

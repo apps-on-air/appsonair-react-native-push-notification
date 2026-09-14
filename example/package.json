@@ -1,0 +1,47 @@
+{
+  "name": "AppsOnAirPushExample",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "lint": "eslint .",
+    "start": "react-native start",
+    "test": "jest",
+    "arch:new": "node scripts/set-arch.js new",
+    "arch:old": "node scripts/set-arch.js old",
+    "pods:new": "RCT_NEW_ARCH_ENABLED=1 pod install --project-directory=ios",
+    "pods:old": "RCT_NEW_ARCH_ENABLED=0 pod install --project-directory=ios",
+    "android:new": "npm run arch:new && react-native run-android",
+    "android:old": "npm run arch:old && react-native run-android",
+    "ios:new": "npm run pods:new && react-native run-ios",
+    "ios:old": "npm run pods:old && react-native run-ios"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-native": "0.76.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "15.0.1",
+    "@react-native-community/cli-platform-android": "15.0.1",
+    "@react-native-community/cli-platform-ios": "15.0.1",
+    "@react-native/babel-preset": "0.76.3",
+    "@react-native/eslint-config": "0.76.3",
+    "@react-native/metro-config": "0.76.3",
+    "@react-native/typescript-config": "0.76.3",
+    "@types/react": "^18.2.6",
+    "@types/react-test-renderer": "^18.0.0",
+    "babel-jest": "^29.6.3",
+    "eslint": "^8.19.0",
+    "jest": "^29.6.3",
+    "prettier": "2.8.8",
+    "react-test-renderer": "18.3.1",
+    "typescript": "5.0.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

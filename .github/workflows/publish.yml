@@ -1,0 +1,69 @@
+name: '🚀 release'
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: 🚀 release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: 📚 checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org/'
+
+      # `npm ci` also runs `prepare` (bob build), so lib/ is rebuilt from source
+      # rather than trusting whatever was committed.
+      - name: 📦 install
+        run: npm ci
+
+      - name: 🔎 typecheck
+        run: npm run typecheck
+
+      - name: 🧹 lint
+        run: npm run lint
+
+      - name: 🏗️ build
+        run: npm run clean && npm run prepare
+
+      # A release tag that disagrees with package.json publishes the wrong
+      # version under the right-looking tag, and npm versions cannot be reused.
+      - name: 🏷️ check the tag matches package.json
+        if: github.event_name == 'release'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "release tag '$GITHUB_REF_NAME' does not match package.json version '$VERSION'"
+            exit 1
+          fi
+
+      # npm does NOT infer a dist-tag from a prerelease version: without this,
+      # 0.0.1-alpha would install for everyone running `npm i appsonair-react-native-push`.
+      - name: 🏷️ resolve the dist-tag
+        id: disttag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          case "$VERSION" in
+            *-*) TAG=$(echo "$VERSION" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+-([a-zA-Z]+).*$/\1/') ;;
+            *)   TAG=latest ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "publishing $VERSION under dist-tag '$TAG'"
+
+      - name: 🚀 publish
+        run: npm publish --access public --tag ${{ steps.disttag.outputs.tag }} --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}

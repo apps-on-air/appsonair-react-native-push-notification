@@ -28,15 +28,20 @@ receive anything until you replace them with your own:
 | `android/app/src/main/AndroidManifest.xml` | `AppsonairAppId` = `your-appsonair-app-id` | your AppsOnAir app id |
 | `ios/AppsOnAirPushExample/Info.plist` | `AppsonairAppId` = `your-appsonair-app-id` | your AppsOnAir app id |
 
-**Android also needs Firebase.** `android/app/google-services.json` is a **stub**
-— valid enough for the build and for CI, useless for delivery. Register
-`com.appsonairpushexample` in your own Firebase project, download the real file
-over it, and take care not to commit it back. The native SDK uses FCM and will
-not produce a token without it.
+**Android also needs Firebase**, and no credentials ship with this repo. Create a
+Firebase project, register an Android app with package name
+`com.appsonairpushexample`, and drop the downloaded `google-services.json` into
+`android/app/`. It is gitignored, so it stays yours.
 
-iOS uses APNs directly, so it needs no Firebase file — but it does need the Push
+Without it the app still builds — `app/build.gradle` applies the Google Services
+plugin only when the file is present, and warns when it isn't — but
+`initialize()` fails at runtime with *Default FirebaseApp is not initialized in
+this process*, because the APK carries no sender id.
+
+iOS uses APNs directly and needs no Firebase file at all. It does need the Push
 Notifications capability on the target and a real `AppsonairAppId` in
-`Info.plist`.
+`Info.plist`. Both targets use the `com.appsonairpushexample` bundle id, which
+you will want to change to one your team can sign and enable push on.
 
 **Release builds run R8.** `enableProguardInReleaseBuilds` is on, unlike the
 stock React Native template, so `./gradlew :app:assembleRelease` exercises the

@@ -72,3 +72,11 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Firebase config -- per-developer credentials, never committed.
+# Android: the Google Services plugin in app/build.gradle is applied only when
+# this file is present, so its absence is a warning rather than a build failure.
+# iOS talks to APNs directly and needs no Firebase file at all; the entry is here
+# so one cannot be added by accident.
+google-services.json
+GoogleService-Info.plist

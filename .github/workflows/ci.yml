@@ -108,9 +108,12 @@ jobs:
       # R8 only ever runs in an application build -- an AAR is published
       # unminified -- so a library stripped by a consumer's release build cannot
       # be caught by assembling the library. The example's release build turns
-      # minification on for exactly this reason, and it is signed with the
-      # committed debug keystore and built against a stub google-services.json,
-      # so nothing secret is needed to run it. One ABI keeps it quick; R8 is
+      # minification on for exactly this reason.
+      #
+      # No secrets needed: it is signed with the committed debug keystore, and
+      # the Google Services plugin is applied only when google-services.json is
+      # present, which it is not here. The APK cannot receive a push without one,
+      # but R8 runs over the same code either way. One ABI keeps it quick; R8 is
       # architecture-independent.
       - name: 🤖 assemble the example app (release, R8 on)
         working-directory: example/android

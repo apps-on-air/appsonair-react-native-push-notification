@@ -47,13 +47,22 @@ jobs:
       # Fails the job if the tarball would ship without the native sources --
       # the podspec, the Android module or the iOS bridge going missing from
       # `files` is invisible until someone installs the package.
-      # --ignore-scripts is load-bearing, not a speed-up: `npm pack` would
-      # otherwise run `prepare`, and bob writes its progress to stdout, which
-      # lands in pack.json ahead of the JSON and makes it unparseable. The
-      # build step above already produced lib/, so there is nothing to rebuild.
+      # Two guards, because one is not enough.
+      #
+      # --ignore-scripts is meant to stop `npm pack` running `prepare`, since bob
+      # writes progress to stdout and that lands in pack.json ahead of the JSON.
+      # It works on npm 11, but npm 10 -- which is what Node 20 ships, and what
+      # this job actually runs -- ignores the flag for pack and runs `prepare`
+      # anyway. So the flag alone is not portable across npm versions.
+      #
+      # Hence the sed: npm pretty-prints the --json array starting with a bare
+      # `[` line, while every bob line is prefixed (ℹ / ✔). Slicing from that
+      # line forward yields valid JSON whether or not `prepare` ran. The build
+      # step above already produced lib/, so a rebuild here is only wasted time,
+      # never wrong output.
       - name: 📋 verify package contents
         run: |
-          npm pack --dry-run --json --ignore-scripts > pack.json
+          npm pack --dry-run --json --ignore-scripts | sed -n '/^\[$/,$p' > pack.json
           node -e "
             const files = require('./pack.json')[0].files.map((f) => f.path);
             const required = [

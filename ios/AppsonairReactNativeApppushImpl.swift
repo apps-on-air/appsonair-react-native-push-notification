@@ -8,19 +8,19 @@ import React
 /**
  Swift half of the iOS bridge.
 
- The ObjC++ class in AppsonairReactNativePush.mm owns one of these and forwards
+ The ObjC++ class in AppsonairReactNativeApppush.mm owns one of these and forwards
  every call to it. The split exists because the two halves can only do one job
  each: the native `AppPushService` API is Swift-only (its static members are not
  `@objc`, so ObjC cannot reach them), while the Codegen-generated
- `NativeAppsonairPushSpec` protocol is ObjC-only and cannot be adopted from Swift.
+ `NativeAppsonairApppushSpec` protocol is ObjC-only and cannot be adopted from Swift.
 
  Threading: `AppPushService` is `@MainActor`-isolated in its entirety (parity A4),
  and React Native calls native modules off the main queue. Every method here
  therefore hops via `Task { @MainActor in ... }` before touching the SDK, and
  resolves its promise from inside that hop.
  */
-@objc(AppsonairReactNativePushImpl)
-public class AppsonairReactNativePushImpl: NSObject {
+@objc(AppsonairReactNativeApppushImpl)
+public class AppsonairReactNativeApppushImpl: NSObject {
 
   /// Set by the ObjC++ class to `sendEventWithName:body:`. Nil until the module
   /// has JS listeners, which is why every emit site checks it.
@@ -501,7 +501,7 @@ public class AppsonairReactNativePushImpl: NSObject {
 //
 // Split into extensions so each protocol's methods sit next to the event they emit.
 
-extension AppsonairReactNativePushImpl: PushListener {
+extension AppsonairReactNativeApppushImpl: PushListener {
   public func onAPNsTokenUpdated(token: String, environment: APNsEnvironment) {
     // Parity B1: one event shape for both platforms. Android sends `environment: null`.
     emit(Event.tokenUpdated, ["token": token, "environment": environment.rawValue])
@@ -533,7 +533,7 @@ extension AppsonairReactNativePushImpl: PushListener {
   }
 }
 
-extension AppsonairReactNativePushImpl: NotificationClickListener {
+extension AppsonairReactNativeApppushImpl: NotificationClickListener {
   public func onClick(event: NotificationClickEvent) {
     emit(Event.notificationOpened, [
       "notification": Self.serialize(event.notification),
@@ -543,7 +543,7 @@ extension AppsonairReactNativePushImpl: NotificationClickListener {
   }
 }
 
-extension AppsonairReactNativePushImpl: NotificationLifecycleListener {
+extension AppsonairReactNativeApppushImpl: NotificationLifecycleListener {
   public func onWillDisplay(event: NotificationWillDisplayEvent) {
     // Informational only on iOS -- see completeNotificationWillDisplay().
     emit(Event.notificationWillDisplay, [
@@ -552,13 +552,13 @@ extension AppsonairReactNativePushImpl: NotificationLifecycleListener {
   }
 }
 
-extension AppsonairReactNativePushImpl: NotificationPermissionObserver {
+extension AppsonairReactNativeApppushImpl: NotificationPermissionObserver {
   public func onNotificationPermissionDidChange(_ permission: Bool) {
     emit(Event.permissionChanged, ["granted": permission])
   }
 }
 
-extension AppsonairReactNativePushImpl: PushSubscriptionObserver {
+extension AppsonairReactNativeApppushImpl: PushSubscriptionObserver {
   public func onPushSubscriptionDidChange(state: PushSubscriptionChangedState) {
     // `PushSubscriptionChangedState` carries only `token` and `optedIn` on both
     // platforms -- the subscription id lives on the SDK singleton, which is
@@ -582,7 +582,7 @@ extension AppsonairReactNativePushImpl: PushSubscriptionObserver {
   }
 }
 
-extension AppsonairReactNativePushImpl: UserStateObserver {
+extension AppsonairReactNativeApppushImpl: UserStateObserver {
   public func onUserStateDidChange(state: UserChangedState) {
     emit(Event.userStateChanged, [
       "current": [

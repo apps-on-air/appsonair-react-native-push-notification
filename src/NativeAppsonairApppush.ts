@@ -5,11 +5,11 @@ import type { UnsafeObject } from 'react-native/Libraries/Types/CodegenTypes';
  * Codegen spec for the AppsOnAir Push TurboModule.
  *
  * This file is consumed by React Native Codegen and compiles to
- * `NativeAppsonairPushSpec` — a Java abstract class and an ObjC protocol that
+ * `NativeAppsonairApppushSpec` — a Java abstract class and an ObjC protocol that
  * the native modules implement under the New Architecture. On the Old
  * Architecture the same JS object is served by the legacy bridge module, which
  * exposes an identical method set (see android/src/oldarch and the
- * `RCT_NEW_ARCH_ENABLED` guard in ios/AppsonairReactNativePush.mm).
+ * `RCT_NEW_ARCH_ENABLED` guard in ios/AppsonairReactNativeApppush.mm).
  *
  * Constraints this file must respect — codegen rejects or silently mistypes
  * anything else, so do not "improve" the signatures below:
@@ -30,10 +30,10 @@ import type { UnsafeObject } from 'react-native/Libraries/Types/CodegenTypes';
  * load-bearing rather than lazy.
  *
  * Codegen compiles a named object type into a generated C++ struct, so the
- * ObjC signature becomes `JS::NativeAppsonairPush::NativePushConfig &` under the
+ * ObjC signature becomes `JS::NativeAppsonairApppush::NativePushConfig &` under the
  * New Architecture while the Old Architecture bridge still passes
  * `NSDictionary *`. The two would no longer share a selector, and
- * ios/AppsonairReactNativePush.mm could not implement both from one method body.
+ * ios/AppsonairReactNativeApppush.mm could not implement both from one method body.
  * `UnsafeObject` maps to `NSDictionary *` on both, and to `ReadableMap` on both
  * on Android.
  *
@@ -184,5 +184,5 @@ export interface Spec extends TurboModule {
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>(
-  'AppsonairReactNativePush'
+  'AppsonairReactNativeApppush'
 );

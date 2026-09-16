@@ -39,11 +39,11 @@ const config = {
     extraNodeModules: {
       // The library is not a node_modules entry -- it is aliased straight to the
       // repo root. Combined with `source` above, importing
-      // 'appsonair-react-native-push' resolves to ../src/index.tsx. This is also
+      // 'appsonair-react-native-apppush' resolves to ../src/index.tsx. This is also
       // why example/package.json does not list it as a dependency: pointing a
       // workspace at its own root needs `link:`/`file:` syntax that npm and Yarn
       // disagree about, and none of it is necessary.
-      'appsonair-react-native-push': root,
+      'appsonair-react-native-apppush': root,
       react: resolveFrom('react'),
       'react-native': resolveFrom('react-native'),
     },

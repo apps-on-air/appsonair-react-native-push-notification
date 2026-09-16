@@ -1,4 +1,4 @@
-package com.appsonairreactnativepush
+package com.appsonairreactnativeapppush
 
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -15,7 +15,7 @@ import com.facebook.react.module.annotations.ReactModule
  * build.gradle puts exactly one of the two on the compile path, so the JS side
  * resolves the same module name either way and never learns which is in use.
  *
- * The method set is kept in lockstep with src/NativeAppsonairPush.ts by hand;
+ * The method set is kept in lockstep with src/NativeAppsonairApppush.ts by hand;
  * there is no Codegen here to check it. When adding a method, add it to the spec,
  * to this class, and to the newarch class together.
  *
@@ -23,13 +23,13 @@ import com.facebook.react.module.annotations.ReactModule
  * bridge would accept `Int`, but keeping both classes identical means the shared
  * implementation sees one calling convention.
  */
-@ReactModule(name = AppsonairReactNativePushModuleImpl.NAME)
-class AppsonairReactNativePushModule(reactContext: ReactApplicationContext) :
+@ReactModule(name = AppsonairReactNativeApppushModuleImpl.NAME)
+class AppsonairReactNativeApppushModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
-  private val impl = AppsonairReactNativePushModuleImpl(reactContext)
+  private val impl = AppsonairReactNativeApppushModuleImpl(reactContext)
 
-  override fun getName(): String = AppsonairReactNativePushModuleImpl.NAME
+  override fun getName(): String = AppsonairReactNativeApppushModuleImpl.NAME
 
   // MARK: Lifecycle
 

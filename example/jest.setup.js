@@ -30,5 +30,5 @@ const nativeModule = new Proxy(
   },
 );
 
-NativeModules.AppsonairReactNativePush = nativeModule;
+NativeModules.AppsonairReactNativeApppush = nativeModule;
 jest.spyOn(TurboModuleRegistry, 'get').mockReturnValue(nativeModule);

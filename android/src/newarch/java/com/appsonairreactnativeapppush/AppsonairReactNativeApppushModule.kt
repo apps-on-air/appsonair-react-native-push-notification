@@ -1,4 +1,4 @@
-package com.appsonairreactnativepush
+package com.appsonairreactnativeapppush
 
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -9,11 +9,11 @@ import com.facebook.react.module.annotations.ReactModule
 /**
  * New Architecture module.
  *
- * Extends the Codegen-generated `NativeAppsonairPushSpec`, so the method set here
- * is checked against src/NativeAppsonairPush.ts at compile time -- adding a method
+ * Extends the Codegen-generated `NativeAppsonairApppushSpec`, so the method set here
+ * is checked against src/NativeAppsonairApppush.ts at compile time -- adding a method
  * to the spec without implementing it will fail the build.
  *
- * Every method delegates to [AppsonairReactNativePushModuleImpl], which is shared
+ * Every method delegates to [AppsonairReactNativeApppushModuleImpl], which is shared
  * verbatim with the Old Architecture module in src/oldarch. Nothing but the base
  * class and the parameter types differ between the two.
  *
@@ -21,13 +21,13 @@ import com.facebook.react.module.annotations.ReactModule
  * `double`, never `int`, so the conversion to `Int` happens here rather than in
  * the shared implementation.
  */
-@ReactModule(name = AppsonairReactNativePushModuleImpl.NAME)
-class AppsonairReactNativePushModule(reactContext: ReactApplicationContext) :
-  NativeAppsonairPushSpec(reactContext) {
+@ReactModule(name = AppsonairReactNativeApppushModuleImpl.NAME)
+class AppsonairReactNativeApppushModule(reactContext: ReactApplicationContext) :
+  NativeAppsonairApppushSpec(reactContext) {
 
-  private val impl = AppsonairReactNativePushModuleImpl(reactContext)
+  private val impl = AppsonairReactNativeApppushModuleImpl(reactContext)
 
-  override fun getName(): String = AppsonairReactNativePushModuleImpl.NAME
+  override fun getName(): String = AppsonairReactNativeApppushModuleImpl.NAME
 
   // MARK: Lifecycle
 

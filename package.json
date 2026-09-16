@@ -1,5 +1,5 @@
 {
-  "name": "appsonair-react-native-push",
+  "name": "appsonair-react-native-apppush",
   "version": "0.0.1-alpha",
   "description": "AppsOnAir push notifications for React Native — wraps the native AppsOnAir iOS and Android Push SDKs",
   "source": "./src/index.tsx",
@@ -88,11 +88,11 @@
     "react-native": "*"
   },
   "codegenConfig": {
-    "name": "AppsonairReactNativePushSpec",
+    "name": "AppsonairReactNativeApppushSpec",
     "type": "modules",
     "jsSrcsDir": "src",
     "android": {
-      "javaPackageName": "com.appsonairreactnativepush"
+      "javaPackageName": "com.appsonairreactnativeapppush"
     }
   },
   "react-native-builder-bob": {

@@ -50,7 +50,7 @@ jobs:
           fi
 
       # npm does NOT infer a dist-tag from a prerelease version: without this,
-      # 0.0.1-alpha would install for everyone running `npm i appsonair-react-native-push`.
+      # 0.0.1-alpha would install for everyone running `npm i appsonair-react-native-apppush`.
       - name: 🏷️ resolve the dist-tag
         id: disttag
         run: |

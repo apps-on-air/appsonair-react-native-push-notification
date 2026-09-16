@@ -1,4 +1,4 @@
-package com.appsonairreactnativepush
+package com.appsonairreactnativeapppush
 
 import android.app.Activity
 import android.app.NotificationManager
@@ -52,12 +52,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * marshals, so this class does no dispatching of its own -- except for the one
  * documented latch in [onWillDisplay].
  */
-class AppsonairReactNativePushModuleImpl(
+class AppsonairReactNativeApppushModuleImpl(
   private val reactContext: ReactApplicationContext
 ) {
 
   companion object {
-    const val NAME = "AppsonairReactNativePush"
+    const val NAME = "AppsonairReactNativeApppush"
 
     // Event names. These strings are duplicated in src/index.tsx and in the iOS
     // bridge -- a rename has to land in all three at once.
@@ -223,7 +223,7 @@ class AppsonairReactNativePushModuleImpl(
     PushNotifications.addForegroundLifecycleListener(
       object : INotificationLifecycleListener {
         override fun onWillDisplay(event: NotificationWillDisplayEvent) =
-          this@AppsonairReactNativePushModuleImpl.onWillDisplay(event)
+          this@AppsonairReactNativeApppushModuleImpl.onWillDisplay(event)
       }
     )
 

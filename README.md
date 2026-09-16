@@ -1,8 +1,6 @@
-# appsonair-react-native-push
+# appsonair-react-native-apppush
 
-Push notifications for React Native, wrapping the native AppsOnAir SDKs —
-[iOS](https://github.com/apps-on-air/appsonair-ios-push-notification) (APNs, no Firebase) and
-[Android](https://github.com/apps-on-air/appsonair-android-push-notification) (FCM).
+Push notifications for React Native
 
 Works on both React Native architectures. New Arch gets a real Codegen
 TurboModule, Old Arch gets a Bridge NativeModule — picked at build time, same JS
@@ -35,14 +33,14 @@ API either way. Nothing in your app code changes.
 ## Install
 
 > **Alpha.** Pin this exact version — the API may change between releases. See
-> [the notice above](#appsonair-react-native-push) before adopting it.
+> [the notice above](#appsonair-react-native-apppush) before adopting it.
 
 ```sh
-npm install appsonair-react-native-push@0.0.1-alpha
+npm install appsonair-react-native-apppush@0.0.1-alpha
 npx pod-install          # iOS only
 ```
 
-`npm install appsonair-react-native-push` on its own will not find it: alpha
+`npm install appsonair-react-native-apppush` on its own will not find it: alpha
 releases are published under the `alpha` dist-tag, not `latest`.
 
 Autolinking does the rest — nothing to add to `MainApplication.kt` or `AppDelegate`.
@@ -59,7 +57,7 @@ Autolinking does the rest — nothing to add to `MainApplication.kt` or `AppDele
 ## Quick start
 
 ```ts
-import AppPushService from 'appsonair-react-native-push';
+import AppPushService from 'appsonair-react-native-apppush';
 
 async function setupPush() {
   await AppPushService.initialize({ debug: __DEV__ });
@@ -79,7 +77,7 @@ Subscribe to events once near app start, and keep them for the app's lifetime:
 
 ```ts
 import { useEffect } from 'react';
-import AppPushService from 'appsonair-react-native-push';
+import AppPushService from 'appsonair-react-native-apppush';
 
 useEffect(() => {
   const subs = [
@@ -100,7 +98,7 @@ useEffect(() => {
 Named exports work too, if you prefer them or want tree-shaking:
 
 ```ts
-import { initialize, getToken, onNotificationOpened, user } from 'appsonair-react-native-push';
+import { initialize, getToken, onNotificationOpened, user } from 'appsonair-react-native-apppush';
 ```
 
 ---
@@ -121,8 +119,7 @@ import { initialize, getToken, onNotificationOpened, user } from 'appsonair-reac
 <details>
 <summary><b>App Groups</b> — needed for delivery receipts from a Notification Service Extension</summary>
 
-There's no `appGroupId` option in `initialize()` because the native initializer
-doesn't take one. iOS resolves the group itself: an `AppsOnAirAppGroup` string in
+iOS resolves the group itself: an `AppsOnAirAppGroup` string in
 `Info.plist`, else the convention `group.<your-bundle-id>.appsonair`.
 
 Enable that group on **both** the app target and your Notification Service
@@ -139,7 +136,7 @@ Objective-C app (`AppDelegate.mm`, `main.m`, nothing else) fails to link:
 ```
 Undefined symbols: __swift_FORCE_LOAD_$_swiftCompatibility56
   referenced from libAppsOnAir-Core.a, libAppsOnAir-AppPush.a,
-                  libReachabilitySwift.a, libappsonair-react-native-push.a
+                  libReachabilitySwift.a, libappsonair-react-native-apppush.a
 ```
 
 **Simplest fix** — add any empty `.swift` file to your app target and let Xcode
@@ -175,6 +172,28 @@ Swift-bearing pods pull the paths in — that's luck, not design. Apply it regar
 <key>BGTaskSchedulerPermittedIdentifiers</key>
 <array><string>com.appsonair.push.background-sync</string></array>
 ```
+</details>
+
+<details>
+<summary><b><code>AppsOnAir-Core</code> is pinned to <code>>= 1.2.3</code></b> — only matters if your Podfile.lock already carries an older one</summary>
+
+This package declares `AppsOnAir-Core >= 1.2.3` alongside the Push SDK itself.
+The floor is deliberate: `AppsOnAir-AppPush.podspec` depends on
+`AppsOnAir-Core` with no constraint, but `AppsOnAirDeviceInfo` calls
+`AppsOnAirCoreServices.getDeviceMetadata()`, which only exists in 1.2.x.
+
+A fresh install resolves the newest Core and never notices. The case this covers
+is an app that already pins an older Core in its `Podfile.lock` — likely if you
+also use AppLink, AppSync or AppRemark — where an unconstrained dependency stays
+satisfied by 1.1.1 and the Push SDK then fails to compile.
+
+If CocoaPods reports a conflict with a Core version another pod requires:
+
+```sh
+pod update AppsOnAir-Core
+```
+
+The pin goes away once the upstream podspec carries its own floor.
 </details>
 
 <details>
@@ -249,7 +268,7 @@ from your app's `android/gradle.properties` — no need to patch this package:
 
 ```properties
 # The default.
-AppsonairReactNativePush_pushSdkCoordinate=com.github.apps-on-air:appsonair-android-push-notification:0.0.2-alpha
+AppsonairReactNativeApppush_pushSdkCoordinate=com.github.apps-on-air:appsonair-android-push-notification:0.0.2-alpha
 ```
 </details>
 
@@ -405,36 +424,21 @@ Each returns a `Subscription` with `.remove()`.
 | `onPermissionChanged` | `{ granted }` |
 | `onSubscriptionChanged` | `{ previous, current }` |
 | `onUserStateChanged` | `{ current }` |
+| `onTokenUpdated` | `{ token, environment }` — `environment` is `'sandbox'` / `'production'` on iOS, `null` on Android. |
+| `onError` | `{ code, message }` — SDK-level failures that happen outside any call you made. |
+| `onSilentNotification` | `{ data }` — iOS sends `content-available`, Android needs a `silent: "true"` data key. |
+| `onInstallationIdUpdated` | `{ id }` — Firebase Installation ID. **Android only.** |
+
+Subscribe to `onTokenUpdated` if your backend stores the device token — it is
+the only way to hear about a mid-session rotation, which `getToken()` at startup
+will miss. Events raised before the first subscriber exists are dropped rather
+than queued, so read the corresponding getter once after subscribing if you also
+need the current value.
 
 On the wire these are `AppsonairPush:onNotificationReceived`,
 `AppsonairPush:onNotificationOpened` and so on — both native bridges emit that
 prefix. You only need the raw names if you subscribe through
 `NativeEventEmitter` yourself instead of using the helpers above.
-
-<details>
-<summary><b>Native methods deliberately not exported to JS</b></summary>
-
-The native SDKs and the Codegen spec still implement these — the JS layer just
-doesn't export them. Nothing native was removed, so re-exposing any of them is a
-change to `src/index.tsx` alone.
-
-`setSubscriptionId`, `refreshToken`, `getInstallationId`, `getApnsEnvironment`,
-`notifications.createChannel` / `deleteChannel`, `setTestDevice` / `isTestDevice`,
-`scheduleBackgroundSync` / `cancelBackgroundSync`,
-`setAutoRegisterForRemoteNotifications`, and the `onTokenUpdated`,
-`onSilentNotification`, `onInstallationIdUpdated` and `onError` events.
-
-Two consequences worth knowing:
-
-- **Async native errors have no JS surface.** Both bridges still emit
-  `AppsonairPush:onError`, but nothing subscribes, so RN drops it. Failures that
-  don't belong to a specific promise are visible only in the native log — run
-  `debug.setLogLevel('debug')` before `initialize()`.
-- **Token delivery is pull-only.** Without `onTokenUpdated` you have to poll
-  `getToken()` to forward the token to your backend.
-</details>
-
----
 
 ## Platform differences
 
@@ -509,17 +513,17 @@ checkouts of the SDKs instead is opt-in: `-PappsonairLocalSdk=true` on Android,
 <details>
 <summary><b>How both architectures are supported</b></summary>
 
-- **One spec.** `src/NativeAppsonairPush.ts` is the Codegen spec, and also the
+- **One spec.** `src/NativeAppsonairApppush.ts` is the Codegen spec, and also the
   only method list — the JS layer, both Android modules and the iOS bridge are
   all checked against it.
 - **Android** compiles `src/newarch` or `src/oldarch` depending on
   `newArchEnabled`. Both declare the same class in the same package and differ
-  only in their base class (`NativeAppsonairPushSpec` vs
+  only in their base class (`NativeAppsonairApppushSpec` vs
   `ReactContextBaseJavaModule`); all behaviour lives in the shared
-  `AppsonairReactNativePushModuleImpl`.
+  `AppsonairReactNativeApppushModuleImpl`.
 - **iOS** uses one `RCT_EXPORT_METHOD` body per method. Codegen derives its ObjC
   selectors from the same JS names the macro does, so a single implementation
-  satisfies the `NativeAppsonairPushSpec` protocol on New Arch and registers with
+  satisfies the `NativeAppsonairApppushSpec` protocol on New Arch and registers with
   the bridge on Old. `#ifdef RCT_NEW_ARCH_ENABLED` covers only the adopted
   protocol and `getTurboModule:`.
 

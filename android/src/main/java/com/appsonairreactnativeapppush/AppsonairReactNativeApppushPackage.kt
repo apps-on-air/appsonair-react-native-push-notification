@@ -1,4 +1,4 @@
-package com.appsonairreactnativepush
+package com.appsonairreactnativeapppush
 
 import com.facebook.react.TurboReactPackage
 import com.facebook.react.bridge.NativeModule
@@ -15,14 +15,14 @@ import com.facebook.react.module.model.ReactModuleInfoProvider
  * this file lives in src/main rather than being duplicated per source set --
  * only the module class it instantiates differs, and the build picks that.
  */
-class AppsonairReactNativePushPackage : TurboReactPackage() {
+class AppsonairReactNativeApppushPackage : TurboReactPackage() {
 
   override fun getModule(
     name: String,
     reactContext: ReactApplicationContext
   ): NativeModule? =
-    if (name == AppsonairReactNativePushModuleImpl.NAME) {
-      AppsonairReactNativePushModule(reactContext)
+    if (name == AppsonairReactNativeApppushModuleImpl.NAME) {
+      AppsonairReactNativeApppushModule(reactContext)
     } else {
       null
     }
@@ -30,9 +30,9 @@ class AppsonairReactNativePushPackage : TurboReactPackage() {
   override fun getReactModuleInfoProvider() = ReactModuleInfoProvider {
     val isTurboModule = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
     mapOf(
-      AppsonairReactNativePushModuleImpl.NAME to ReactModuleInfo(
-        AppsonairReactNativePushModuleImpl.NAME,
-        AppsonairReactNativePushModuleImpl.NAME,
+      AppsonairReactNativeApppushModuleImpl.NAME to ReactModuleInfo(
+        AppsonairReactNativeApppushModuleImpl.NAME,
+        AppsonairReactNativeApppushModuleImpl.NAME,
         false, // canOverrideExistingModule
         false, // needsEagerInit
         false, // isCxxModule

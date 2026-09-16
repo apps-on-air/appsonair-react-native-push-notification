@@ -6,8 +6,9 @@ import {
   type EmitterSubscription,
 } from 'react-native';
 
-import type { Spec } from './NativeAppsonairPush';
+import type { Spec } from './NativeAppsonairApppush';
 import type {
+  InstallationIdEvent,
   LogLevel,
   NotificationOpenedEvent,
   NotificationReceivedEvent,
@@ -15,18 +16,21 @@ import type {
   PermissionChangedEvent,
   PermissionStatus,
   PushConfig,
+  PushErrorEvent,
   PushNotification,
   PushSubscriptionChangedEvent,
   PushSubscriptionState,
   RequestPermissionOptions,
+  SilentNotificationEvent,
   Subscription,
+  TokenUpdatedEvent,
   UserStateChangedEvent,
 } from './types';
 
 export * from './types';
 
 const LINKING_ERROR =
-  `The package 'appsonair-react-native-push' doesn't seem to be linked. Make sure: \n\n` +
+  `The package 'appsonair-react-native-apppush' doesn't seem to be linked. Make sure: \n\n` +
   Platform.select({ ios: "- You have run 'pod install'\n", default: '' }) +
   '- You rebuilt the app after installing the package\n' +
   '- You are not using Expo Go\n';
@@ -41,8 +45,8 @@ const LINKING_ERROR =
  * into an actionable message instead of `undefined is not an object`.
  */
 const NativePush: Spec =
-  TurboModuleRegistry.get<Spec>('AppsonairReactNativePush') ??
-  (NativeModules.AppsonairReactNativePush as Spec | undefined) ??
+  TurboModuleRegistry.get<Spec>('AppsonairReactNativeApppush') ??
+  (NativeModules.AppsonairReactNativeApppush as Spec | undefined) ??
   (new Proxy(
     {},
     {
@@ -55,14 +59,14 @@ const NativePush: Spec =
 const emitter = new NativeEventEmitter(
   // The legacy bridge needs the module instance to route `addListener`;
   // the New Architecture ignores this argument entirely.
-  NativeModules.AppsonairReactNativePush ?? undefined
+  NativeModules.AppsonairReactNativeApppush ?? undefined
 );
 
 // MARK: - Event names
 // Kept in one place because the native bridges hardcode these same strings — a
 // rename has to happen in four files at once: here,
-// AppsonairReactNativePushModuleImpl.kt, AppsonairReactNativePushImpl.swift and
-// the supportedEvents list in AppsonairReactNativePush.mm.
+// AppsonairReactNativeApppushModuleImpl.kt, AppsonairReactNativeApppushImpl.swift and
+// the supportedEvents list in AppsonairReactNativeApppush.mm.
 
 const EVENT = {
   notificationReceived: 'AppsonairPush:onNotificationReceived',
@@ -71,14 +75,10 @@ const EVENT = {
   permissionChanged: 'AppsonairPush:onPermissionChanged',
   subscriptionChanged: 'AppsonairPush:onSubscriptionChanged',
   userStateChanged: 'AppsonairPush:onUserStateChanged',
-
-  // Still emitted by both native bridges, but deliberately not surfaced in JS:
-  //   AppsonairPush:onTokenUpdated
-  //   AppsonairPush:onSilentNotification
-  //   AppsonairPush:onInstallationIdUpdated
-  //   AppsonairPush:onError
-  // Nothing subscribes to them, so RN drops them. Re-adding a subscriber is a
-  // JS-only change -- the native side and the event names are unchanged.
+  tokenUpdated: 'AppsonairPush:onTokenUpdated',
+  silentNotification: 'AppsonairPush:onSilentNotification',
+  installationIdUpdated: 'AppsonairPush:onInstallationIdUpdated',
+  error: 'AppsonairPush:onError',
 } as const;
 
 // MARK: - Initialization guard
@@ -633,6 +633,75 @@ export function onUserStateChanged(
   return subscribe(EVENT.userStateChanged, callback);
 }
 
+/**
+ * Fires when the device registration token is issued or refreshed.
+ *
+ * This is the push-side counterpart to {@link getToken}: the getter answers
+ * "what is the token now", this answers "the token just changed" — which is when
+ * your backend needs to hear about it. A token can rotate at any point in a
+ * session, so a one-shot `getToken()` at startup will eventually go stale.
+ *
+ * `environment` is the APNs endpoint the backend must send to. It is
+ * `'sandbox'` or `'production'` on iOS and always `null` on Android, where FCM
+ * routes for you.
+ *
+ * Events raised before the first subscriber exists are dropped rather than
+ * queued on both platforms, so read {@link getToken} once after subscribing if
+ * you need the current value too.
+ */
+export function onTokenUpdated(
+  callback: (event: TokenUpdatedEvent) => void
+): Subscription {
+  return subscribe(EVENT.tokenUpdated, callback);
+}
+
+/**
+ * Fires on an SDK-level failure — token registration, a denied permission, a
+ * missing Firebase config.
+ *
+ * These are conditions the SDK hits on its own schedule, outside any call you
+ * made, so they surface here rather than as a rejected promise. A promise
+ * rejection from a method you called carries the same `code` values.
+ *
+ * Without a subscriber these failures are silent, which is why this is worth
+ * wiring even if it only ever logs.
+ */
+export function onError(
+  callback: (event: PushErrorEvent) => void
+): Subscription {
+  return subscribe(EVENT.error, callback);
+}
+
+/**
+ * Fires for a data-only push that is delivered without being displayed.
+ *
+ * Supported on both platforms, but they are triggered differently and your
+ * backend has to send for both: iOS uses the APNs `content-available` flag,
+ * while Android keys off a `silent: "true"` data entry, since FCM has no
+ * transport-level equivalent. See {@link SilentNotificationEvent}.
+ *
+ * iOS invokes the OS completion handler as soon as this event is emitted, so
+ * the handler cannot extend the app's background execution window: treat it as
+ * a notification that the payload arrived, not as a place to await work.
+ */
+export function onSilentNotification(
+  callback: (event: SilentNotificationEvent) => void
+): Subscription {
+  return subscribe(EVENT.silentNotification, callback);
+}
+
+/**
+ * Fires when the Firebase Installation ID becomes available.
+ *
+ * **Android only** — the event name is registered on iOS so the two bridges
+ * stay diffable, but nothing ever emits it there.
+ */
+export function onInstallationIdUpdated(
+  callback: (event: InstallationIdEvent) => void
+): Subscription {
+  return subscribe(EVENT.installationIdUpdated, callback);
+}
+
 // MARK: - Default export
 
 const AppPushService = {
@@ -667,6 +736,10 @@ const AppPushService = {
   onPermissionChanged,
   onSubscriptionChanged,
   onUserStateChanged,
+  onTokenUpdated,
+  onError,
+  onSilentNotification,
+  onInstallationIdUpdated,
 };
 
 export default AppPushService;

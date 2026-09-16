@@ -1,6 +1,6 @@
 # AppsOnAir Push — example app
 
-A test harness for `appsonair-react-native-push`. Every button calls the public
+A test harness for `appsonair-react-native-apppush`. Every button calls the public
 API; the banner at the top reports which native path actually loaded, so running
 the same screen on both builds is a real comparison rather than an assumption.
 
@@ -120,7 +120,7 @@ npm run ios:old         # RCT_NEW_ARCH_ENABLED=0 pod install, then run
 
 **Clean between Android switches.** Gradle caches the generated Codegen sources,
 and switching without a clean is the usual cause of a "cannot find symbol
-`NativeAppsonairPushSpec`" or a stale module:
+`NativeAppsonairApppushSpec`" or a stale module:
 
 ```sh
 cd android && ./gradlew clean && cd ..
@@ -178,7 +178,7 @@ hard-codes a path that does not exist in a workspace. It must resolve the plugin
 through Node; see the comment in that file.
 
 **Stale Codegen after switching architecture** — `cd android && ./gradlew clean`.
-Gradle caches the generated `NativeAppsonairPushSpec`, and a switch without a
+Gradle caches the generated `NativeAppsonairApppushSpec`, and a switch without a
 clean is the usual cause of "cannot find symbol".
 
 ## Known no-ops

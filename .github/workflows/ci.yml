@@ -47,18 +47,22 @@ jobs:
       # Fails the job if the tarball would ship without the native sources --
       # the podspec, the Android module or the iOS bridge going missing from
       # `files` is invisible until someone installs the package.
+      # --ignore-scripts is load-bearing, not a speed-up: `npm pack` would
+      # otherwise run `prepare`, and bob writes its progress to stdout, which
+      # lands in pack.json ahead of the JSON and makes it unparseable. The
+      # build step above already produced lib/, so there is nothing to rebuild.
       - name: 📋 verify package contents
         run: |
-          npm pack --dry-run --json > pack.json
+          npm pack --dry-run --json --ignore-scripts > pack.json
           node -e "
             const files = require('./pack.json')[0].files.map((f) => f.path);
             const required = [
-              'appsonair-react-native-push.podspec',
+              'appsonair-react-native-apppush.podspec',
               'react-native.config.js',
               'android/build.gradle',
-              'android/src/main/java/com/appsonairreactnativepush/AppsonairReactNativePushModuleImpl.kt',
-              'ios/AppsonairReactNativePush.mm',
-              'ios/AppsonairReactNativePushImpl.swift',
+              'android/src/main/java/com/appsonairreactnativeapppush/AppsonairReactNativeApppushModuleImpl.kt',
+              'ios/AppsonairReactNativeApppush.mm',
+              'ios/AppsonairReactNativeApppushImpl.swift',
               'lib/commonjs/index.js',
               'lib/module/index.js',
               'lib/typescript/commonjs/src/index.d.ts',
@@ -99,11 +103,11 @@ jobs:
       # architectures -- the part most likely to break on an SDK bump.
       - name: 🤖 assemble the library (new arch)
         working-directory: example/android
-        run: ./gradlew :appsonair-react-native-push:assembleRelease -PnewArchEnabled=true
+        run: ./gradlew :appsonair-react-native-apppush:assembleRelease -PnewArchEnabled=true
 
       - name: 🤖 assemble the library (old arch)
         working-directory: example/android
-        run: ./gradlew :appsonair-react-native-push:assembleRelease -PnewArchEnabled=false
+        run: ./gradlew :appsonair-react-native-apppush:assembleRelease -PnewArchEnabled=false
 
       # R8 only ever runs in an application build -- an AAR is published
       # unminified -- so a library stripped by a consumer's release build cannot
@@ -118,3 +122,71 @@ jobs:
       - name: 🤖 assemble the example app (release, R8 on)
         working-directory: example/android
         run: ./gradlew :app:assembleRelease -PnewArchEnabled=true -PreactNativeArchitectures=arm64-v8a
+
+  ios:
+    name: 🍎 ios (${{ matrix.arch.name }} arch)
+    # Pinned, not macos-latest: this has to match the Xcode the team develops on,
+    # because the Podfile's post_install works around Xcode 26 specifically
+    # (TOOLCHAIN_DIR resolves to the Metal toolchain there). An older image would
+    # build green without ever exercising the path that workaround exists for.
+    runs-on: macos-26
+    strategy:
+      # Both architectures are reported even when one fails -- the two link
+      # differently and knowing it is only one of them is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        arch:
+          - { name: new, rct: '1' }
+          - { name: old, rct: '0' }
+    steps:
+      - name: 📚 checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: 📦 install
+        run: npm ci
+
+      # Podfile.lock is not tracked, so this resolves against the trunk exactly
+      # as a host app's first install does -- which is what makes the version
+      # pins in the podspec (AppsOnAir-AppPush, and the AppsOnAir-Core floor)
+      # part of what CI actually checks. --repo-update guards against a stale
+      # CDN shard for a recently published version.
+      #
+      # iOS selects the architecture at pod install time through this env var;
+      # there is no gradle.properties equivalent to flip.
+      - name: 🍎 pod install
+        working-directory: example/ios
+        env:
+          RCT_NEW_ARCH_ENABLED: ${{ matrix.arch.rct }}
+        run: pod install --repo-update
+
+      # Compiles the Swift and ObjC++ halves of the bridge against the published
+      # SDK -- the counterpart to the Android job, and the part that a Codegen
+      # spec change or an SDK bump breaks first.
+      #
+      # The example app target is deliberately ObjC-only (AppDelegate.mm, main.m),
+      # which is the layout that needs the Swift runtime search paths the Podfile's
+      # post_install adds. Building it here is what keeps that workaround honest;
+      # it fails on the old arch first, hence both matrix legs.
+      #
+      # Release, to match the Android job: it runs the Hermes bundling phase, so a
+      # library that breaks the release JS bundle fails here rather than on a device.
+      # A simulator destination needs no signing and no secrets.
+      - name: 🍎 build the example app (release)
+        working-directory: example/ios
+        run: |
+          # Logged so a runner-image bump that moves Xcode is visible in the job
+          # output rather than showing up as an unexplained compile failure.
+          xcodebuild -version
+          xcodebuild build \
+            -workspace AppsOnAirPushExample.xcworkspace \
+            -scheme AppsOnAirPushExample \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet

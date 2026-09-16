@@ -5,7 +5,7 @@ module.exports = {
   // through react-native.config.js and the workspace root, which Jest does not
   // read. Without this the suite cannot even import App.tsx.
   moduleNameMapper: {
-    '^appsonair-react-native-push$': '<rootDir>/../src/index.tsx',
+    '^appsonair-react-native-apppush$': '<rootDir>/../src/index.tsx',
   },
 
   // Not `setupFiles`: that key belongs to the react-native preset, and setting

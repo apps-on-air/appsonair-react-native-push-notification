@@ -68,7 +68,7 @@ target 'AppsOnAirPushExample' do
     #
     #   Undefined symbols: __swift_FORCE_LOAD_$_swiftCompatibility56
     #     referenced from libAppsOnAir-Core.a, libAppsOnAir-AppPush.a,
-    #     libReachabilitySwift.a, libappsonair-react-native-push.a
+    #     libReachabilitySwift.a, libappsonair-react-native-apppush.a
     #
     # The New Architecture links without this only because other Swift-bearing
     # pods happen to pull the paths in -- which is luck, not design.

@@ -1,19 +1,19 @@
-#import "AppsonairReactNativePush.h"
+#import "AppsonairReactNativeApppush.h"
 
 // The Swift half. Under CocoaPods the pod's module name is pinned to
-// AppsonairReactNativePush in the podspec, so this header name is stable; the
+// AppsonairReactNativeApppush in the podspec, so this header name is stable; the
 // bracket form is the fallback for build setups that expose it as a framework.
-#if __has_include("AppsonairReactNativePush-Swift.h")
-#import "AppsonairReactNativePush-Swift.h"
+#if __has_include("AppsonairReactNativeApppush-Swift.h")
+#import "AppsonairReactNativeApppush-Swift.h"
 #else
-#import <AppsonairReactNativePush/AppsonairReactNativePush-Swift.h>
+#import <AppsonairReactNativeApppush/AppsonairReactNativeApppush-Swift.h>
 #endif
 
 /**
  * Every method below is written once and serves both architectures.
  *
  * RCT_EXPORT_METHOD builds the selector from the JS method name and the argument
- * labels, which is exactly how Codegen derives the NativeAppsonairPushSpec
+ * labels, which is exactly how Codegen derives the NativeAppsonairApppushSpec
  * protocol selectors. So `RCT_EXPORT_METHOD(login:(NSString *)externalId
  * resolve:...)` produces `login:resolve:reject:` -- the same selector the
  * protocol declares. Under the New Architecture the implementation satisfies the
@@ -21,11 +21,11 @@
  * path needs a second body.
  *
  * The one thing that must hold for this to keep working: argument labels here
- * have to match the parameter names in src/NativeAppsonairPush.ts exactly. A
+ * have to match the parameter names in src/NativeAppsonairApppush.ts exactly. A
  * rename on either side silently breaks the New Architecture build.
  */
-@implementation AppsonairReactNativePush {
-  AppsonairReactNativePushImpl *_impl;
+@implementation AppsonairReactNativeApppush {
+  AppsonairReactNativeApppushImpl *_impl;
   BOOL _hasListeners;
 }
 
@@ -34,7 +34,7 @@ RCT_EXPORT_MODULE()
 - (instancetype)init
 {
   if (self = [super init]) {
-    _impl = [AppsonairReactNativePushImpl new];
+    _impl = [AppsonairReactNativeApppushImpl new];
 
     // Events raised before JS subscribes would trip RCTEventEmitter's
     // "sending event with no listeners" warning, so they are dropped here rather
@@ -487,7 +487,7 @@ RCT_EXPORT_METHOD(completeNotificationWillDisplay:(NSString *)notificationId
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params
 {
-  return std::make_shared<facebook::react::NativeAppsonairPushSpecJSI>(params);
+  return std::make_shared<facebook::react::NativeAppsonairApppushSpecJSI>(params);
 }
 #endif
 

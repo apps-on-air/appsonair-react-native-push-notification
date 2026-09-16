@@ -2,7 +2,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "appsonair-react-native-push": ["./src/index"]
+      "appsonair-react-native-apppush": ["./src/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,

@@ -2,7 +2,7 @@ buildscript {
   // Buildscript is evaluated before everything else, so getExtOrDefault is not available yet.
   def kotlin_version = rootProject.ext.has("kotlinVersion")
     ? rootProject.ext.get("kotlinVersion")
-    : project.properties["AppsonairReactNativePush_kotlinVersion"]
+    : project.properties["AppsonairReactNativeApppush_kotlinVersion"]
 
   repositories {
     google()
@@ -24,7 +24,7 @@ def isNewArchitectureEnabled() {
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
 
-// The React Gradle plugin runs Codegen and puts the generated NativeAppsonairPushSpec
+// The React Gradle plugin runs Codegen and puts the generated NativeAppsonairApppushSpec
 // on the compile classpath. It is only applied on the New Architecture -- on the Old
 // Architecture the spec is never generated, which is why the module class that extends
 // it lives in the newarch source set rather than in main.
@@ -35,13 +35,13 @@ if (isNewArchitectureEnabled()) {
 def getExtOrDefault(name) {
   return rootProject.ext.has(name)
     ? rootProject.ext.get(name)
-    : project.properties["AppsonairReactNativePush_" + name]
+    : project.properties["AppsonairReactNativeApppush_" + name]
 }
 
 def getExtOrIntegerDefault(name) {
   return rootProject.ext.has(name)
     ? rootProject.ext.get(name)
-    : (project.properties["AppsonairReactNativePush_" + name]).toInteger()
+    : (project.properties["AppsonairReactNativeApppush_" + name]).toInteger()
 }
 
 def supportsNamespace() {
@@ -55,7 +55,7 @@ def supportsNamespace() {
 
 android {
   if (supportsNamespace()) {
-    namespace "com.appsonairreactnativepush"
+    namespace "com.appsonairreactnativeapppush"
 
     sourceSets {
       main {
@@ -70,7 +70,7 @@ android {
     minSdkVersion getExtOrIntegerDefault("minSdkVersion")
     targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
 
-    // Read back by AppsonairReactNativePushPackage to tag the module as a
+    // Read back by AppsonairReactNativeApppushPackage to tag the module as a
     // TurboModule or a legacy module. It has to be a build constant rather than a
     // runtime check, because ReactModuleInfo is built before any React instance exists.
     buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
@@ -168,7 +168,7 @@ dependencies {
   // The native AppsOnAir Push SDK, from JitPack -- the host app must have
   // maven { url 'https://jitpack.io' } in its repositories. The coordinate stays
   // overridable for teams pointing at a local build or a private repo -- set
-  // AppsonairReactNativePush_pushSdkCoordinate in the app's gradle.properties, or
+  // AppsonairReactNativeApppush_pushSdkCoordinate in the app's gradle.properties, or
   // substitute a local project in settings.gradle:
   //
   //   includeBuild('../appsonair-push-notification-android')

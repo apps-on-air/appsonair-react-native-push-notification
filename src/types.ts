@@ -168,10 +168,18 @@ export interface UserStateChangedEvent {
 }
 
 /**
- * A data-only push that must not be displayed.
+ * A data-only push that is delivered without being displayed.
  *
- * Parity F5: **iOS only.** Android renders every data push as a visible
- * notification and fires no listener, so this event never arrives there.
+ * Parity F5 — supported on both platforms, but the two are triggered
+ * differently and your backend has to send for both:
+ *
+ * - **iOS** uses the APNs transport flag, `content-available: 1`.
+ * - **Android** has no transport-level equivalent in FCM, so the SDK keys off a
+ *   `silent: "true"` entry in the data payload. A data push *without* that key
+ *   renders as a visible notification and fires no listener here.
+ *
+ * On iOS the OS completion handler is invoked as soon as the event is emitted,
+ * so a handler cannot extend the background execution window.
  */
 export interface SilentNotificationEvent {
   data: Record<string, string>;

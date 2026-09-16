@@ -4,7 +4,7 @@ package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 folly_compiler_flags = '-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -Wno-comma -Wno-shorten-64-to-32'
 
 Pod::Spec.new do |s|
-  s.name         = "appsonair-react-native-push"
+  s.name         = "appsonair-react-native-apppush"
   s.version      = package["version"]
   s.summary      = package["description"]
   s.homepage     = package["homepage"]
@@ -20,10 +20,10 @@ Pod::Spec.new do |s|
   s.swift_version = "5.9"
 
   # Pinned so the Swift-generated header is predictably named
-  # AppsonairReactNativePush-Swift.h. AppsonairReactNativePush.mm imports it by
+  # AppsonairReactNativeApppush-Swift.h. AppsonairReactNativeApppush.mm imports it by
   # that name; without this, CocoaPods derives the module name from the pod name
   # and the import becomes appsonair_react_native_push-Swift.h.
-  s.module_name  = "AppsonairReactNativePush"
+  s.module_name  = "AppsonairReactNativeApppush"
 
   # The native AppsOnAir Push SDK, from the CocoaPods trunk.
   #
@@ -38,6 +38,19 @@ Pod::Spec.new do |s|
   #
   # See the README's iOS installation section.
   s.dependency 'AppsOnAir-AppPush', '0.0.2-alpha'
+
+  # Compensates for a missing version floor upstream, and is not redundant with
+  # the line above: AppsOnAir-AppPush.podspec declares `core.dependency
+  # 'AppsOnAir-Core'` with no constraint, while the SDK's own Package.swift
+  # requires `from: "1.2.3"` and its AppsOnAirDeviceInfo calls
+  # AppsOnAirCoreServices.getDeviceMetadata(), which only exists in 1.2.x.
+  #
+  # A fresh `pod install` resolves the newest Core and is fine either way. The
+  # case this covers is a host app that already carries an older Core in its
+  # Podfile.lock -- likely if it also uses AppLink, AppSync or AppRemark -- where
+  # an unconstrained dependency is satisfied by 1.1.1 and the SDK then fails to
+  # compile. Remove once the upstream podspec carries its own floor.
+  s.dependency 'AppsOnAir-Core', '>= 1.2.3'
 
   # Installs the React dependencies, and on RN >= 0.71 wires up the New
   # Architecture (Codegen output, Folly, ReactCommon) when it is enabled. The

@@ -1,5 +1,5 @@
 // Makes the React promise block typedefs and RCTEventEmitter visible to
-// AppsonairReactNativePushImpl.swift, which uses RCTPromiseResolveBlock and
+// AppsonairReactNativeApppushImpl.swift, which uses RCTPromiseResolveBlock and
 // RCTPromiseRejectBlock in every exported method signature.
 //
 // Under CocoaPods this is reached through the pod's generated umbrella header

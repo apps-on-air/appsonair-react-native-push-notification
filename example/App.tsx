@@ -23,7 +23,7 @@ import {
   View,
 } from 'react-native';
 
-import AppPushService from 'appsonair-react-native-push';
+import AppPushService from 'appsonair-react-native-apppush';
 
 // ---------------------------------------------------------------------------
 // Architecture detection

@@ -6,7 +6,7 @@
  *
  * The base class is the same on both architectures -- RCTEventEmitter, which
  * carries the ten AppsonairPush:* events. Only the adopted protocol differs:
- * the Codegen-generated NativeAppsonairPushSpec under the New Architecture, and
+ * the Codegen-generated NativeAppsonairApppushSpec under the New Architecture, and
  * plain RCTBridgeModule under the Old one.
  *
  * That is the whole conditional. Because Codegen derives its ObjC selectors from
@@ -15,14 +15,14 @@
  */
 #ifdef RCT_NEW_ARCH_ENABLED
 
-#import <AppsonairReactNativePushSpec/AppsonairReactNativePushSpec.h>
+#import <AppsonairReactNativeApppushSpec/AppsonairReactNativeApppushSpec.h>
 
-@interface AppsonairReactNativePush : RCTEventEmitter <NativeAppsonairPushSpec>
+@interface AppsonairReactNativeApppush : RCTEventEmitter <NativeAppsonairApppushSpec>
 @end
 
 #else
 
-@interface AppsonairReactNativePush : RCTEventEmitter <RCTBridgeModule>
+@interface AppsonairReactNativeApppush : RCTEventEmitter <RCTBridgeModule>
 @end
 
 #endif

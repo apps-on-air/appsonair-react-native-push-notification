@@ -9,14 +9,14 @@ API either way. Nothing in your app code changes.
 > [!WARNING]
 > **Alpha release — not for production use.**
 >
-> `0.0.1-alpha` is an early preview, intended for evaluation, prototypes, and
+> `0.0.2-alpha` is an early preview, intended for evaluation, prototypes, and
 > internal test builds. Do **not** ship it in a production app or one with a
 > large user base.
 >
 > - The public API may change without notice and may not stay source-compatible —
 >   expect to update your integration between releases.
 > - Breaking changes are not limited to major versions while the package is pre-1.0.
-> - The native SDKs underneath are pre-release too (`0.0.2-alpha`), and carry the
+> - The native SDKs underneath are pre-release too (`0.0.3-alpha`), and carry the
 >   same caveats.
 > - Not yet proven at scale; some behaviour is still unverified in real-world use.
 >
@@ -36,7 +36,7 @@ API either way. Nothing in your app code changes.
 > [the notice above](#appsonair-react-native-apppush) before adopting it.
 
 ```sh
-npm install appsonair-react-native-apppush@0.0.1-alpha
+npm install appsonair-react-native-apppush@0.0.2-alpha
 npx pod-install          # iOS only
 ```
 
@@ -199,7 +199,7 @@ The pin goes away once the upstream podspec carries its own floor.
 <details>
 <summary><b>Pointing at a local iOS SDK checkout</b> — for SDK development, or if the pod hasn't propagated yet</summary>
 
-This package depends on `AppsOnAir-AppPush` `0.0.2-alpha` from the CocoaPods
+This package depends on `AppsOnAir-AppPush` `0.0.3-alpha` from the CocoaPods
 trunk, so `npx pod-install` normally needs no help. To build against a local
 checkout instead, declare it in your app's Podfile — a `:path` declaration wins
 over this package's dependency line:
@@ -235,7 +235,7 @@ any FCM app. `POST_NOTIFICATIONS` (Android 13+) is requested for you by
 <details>
 <summary><b>Kotlin version</b> — why this package pins the stdlib, and what to do if your app still fails to compile</summary>
 
-The published native SDK (`0.0.2-alpha`) is compiled with **Kotlin 2.2.10** and
+The published native SDK (`0.0.3-alpha`) is compiled with **Kotlin 2.2.10** and
 sets no `languageVersion` floor, so its classes carry metadata `2.2.0`. No React
 Native release ships a Kotlin compiler that can read that — 0.76 pins 1.9.24,
 0.77–0.78 pin 2.0.21, 0.79–0.81 pin 2.1.x — and raising your app's Kotlin to 2.2
@@ -267,8 +267,10 @@ This package pins the released SDK. To point at something else, set the coordina
 from your app's `android/gradle.properties` — no need to patch this package:
 
 ```properties
-# The default.
-AppsonairReactNativeApppush_pushSdkCoordinate=com.github.apps-on-air:appsonair-android-push-notification:0.0.2-alpha
+# The default. Pinned to the `v`-prefixed tag because JitPack's build of the
+# un-prefixed `0.0.3-alpha` form failed on their end -- see the comment in this
+# package's android/gradle.properties.
+AppsonairReactNativeApppush_pushSdkCoordinate=com.github.apps-on-air:appsonair-android-push-notification:v0.0.3-alpha
 ```
 </details>
 
@@ -501,7 +503,7 @@ Architecture is a build-time choice on both platforms — a Metro reload won't
 switch it, and Android needs `./gradlew clean` between switches because Gradle
 caches the generated Codegen sources.
 
-The example resolves the **published** native SDKs (`0.0.2-alpha`) the same way
+The example resolves the **published** native SDKs (`0.0.3-alpha`) the same way
 your app does — JitPack on Android, CocoaPods on iOS. Building against sibling
 checkouts of the SDKs instead is opt-in: `-PappsonairLocalSdk=true` on Android,
 `APPSONAIR_LOCAL_SDK=1` on iOS. See `example/README.md`.

@@ -1,6 +1,6 @@
 {
   "name": "appsonair-react-native-apppush",
-  "version": "0.0.1-alpha",
+  "version": "0.0.2-alpha",
   "description": "AppsOnAir push notifications for React Native — wraps the native AppsOnAir iOS and Android Push SDKs",
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",
@@ -16,7 +16,8 @@
         "types": "./lib/typescript/commonjs/src/index.d.ts",
         "default": "./lib/commonjs/index.js"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "src",

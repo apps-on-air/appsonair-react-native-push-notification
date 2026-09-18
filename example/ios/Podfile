@@ -18,7 +18,7 @@ target 'AppsOnAirPushExample' do
   config = use_native_modules!
 
   # --- Local native SDK wiring (opt-in, for SDK development) ------------------
-  # By default the example resolves AppsOnAir-AppPush 0.0.2-alpha from the
+  # By default the example resolves AppsOnAir-AppPush 0.0.3-alpha from the
   # CocoaPods trunk, exactly like a host app does -- the wrapper's podspec
   # declares it, so nothing is needed here.
   #

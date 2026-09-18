@@ -16,7 +16,7 @@ wrong answer just because the library misbehaved.
 
 ## Prerequisites
 
-By default this example resolves the **published** native SDKs (`0.0.2-alpha`) —
+By default this example resolves the **published** native SDKs (`0.0.3-alpha`) —
 JitPack on Android, the CocoaPods trunk on iOS — so it exercises exactly the
 dependency path a host app gets. Nothing extra to set up.
 
@@ -196,6 +196,6 @@ honest about the native SDKs rather than a bug:
 
 See the root README's *Platform differences* table for the full set.
 
-> Both native SDKs are pre-release (`0.0.2-alpha`), but the backend is live: they
+> Both native SDKs are pre-release (`0.0.3-alpha`), but the backend is live: they
 > register the device and sync subscription state — tags, language, opt-in — to
 > `/v1/subscriptions`. Registration is testable end-to-end.

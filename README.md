@@ -9,7 +9,7 @@ API either way. Nothing in your app code changes.
 > [!WARNING]
 > **Alpha release — not for production use.**
 >
-> `0.0.2-alpha` is an early preview, intended for evaluation, prototypes, and
+> `0.0.3-alpha` is an early preview, intended for evaluation, prototypes, and
 > internal test builds. Do **not** ship it in a production app or one with a
 > large user base.
 >
@@ -36,7 +36,7 @@ API either way. Nothing in your app code changes.
 > [the notice above](#appsonair-react-native-apppush) before adopting it.
 
 ```sh
-npm install appsonair-react-native-apppush@0.0.2-alpha
+npm install appsonair-react-native-apppush@0.0.3-alpha
 npx pod-install          # iOS only
 ```
 

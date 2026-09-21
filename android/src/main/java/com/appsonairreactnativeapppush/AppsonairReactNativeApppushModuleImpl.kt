@@ -152,13 +152,13 @@ class AppsonairReactNativeApppushModuleImpl(
   private fun registerActivityHooks() {
     reactContext.addActivityEventListener(object : ActivityEventListener {
       override fun onActivityResult(
-        activity: Activity?,
+        activity: Activity,
         requestCode: Int,
         resultCode: Int,
         data: Intent?
       ) = Unit
 
-      override fun onNewIntent(intent: Intent?) {
+      override fun onNewIntent(intent: Intent) {
         AppPushService.handleNotificationTapIntent(intent)
       }
     })

@@ -16,9 +16,10 @@ wrong answer just because the library misbehaved.
 
 ## Prerequisites
 
-By default this example resolves the **published** native SDKs (`0.0.3-alpha`) —
-JitPack on Android, the CocoaPods trunk on iOS — so it exercises exactly the
-dependency path a host app gets. Nothing extra to set up.
+By default this example resolves the **published** native SDKs (`1.0.0-beta`
+on both platforms) — JitPack on Android, the CocoaPods trunk on iOS — so it
+exercises exactly the dependency path a host app gets. Nothing extra to set
+up.
 
 Two things are checked in as **placeholders**, and the app will build but not
 receive anything until you replace them with your own:
@@ -59,45 +60,6 @@ npm install
 Use npm or Yarn 3+, not Yarn 1. This package is published, so it cannot be
 `"private": true`, and Yarn 1 refuses workspaces in a non-private project. Yarn 3+
 works and reads `.yarnrc.yml` for the node-modules linker.
-
-## Building against local SDK checkouts
-
-For SDK development, both platforms can be pointed at sibling checkouts instead
-of the published artifacts:
-
-```
-logicwind/
-├── appsonair-push-notification-android/
-├── appsonair-ios-push-notification/
-└── appsonair-react-native-push-notification/   ← this repo
-    └── example/
-```
-
-**Android** — set the property, either per-invocation or in
-`android/gradle.properties`:
-
-```sh
-cd android && ./gradlew -PappsonairLocalSdk=true :app:assembleDebug
-```
-
-```properties
-# android/gradle.properties -- sticky, so `npm run android:new` picks it up too
-appsonairLocalSdk=true
-```
-
-`settings.gradle` maps the SDK's `:push` Gradle project in, and `build.gradle`
-substitutes it for the `com.github.apps-on-air:appsonair-android-push-notification`
-coordinate the wrapper pins. Off by default, both are no-ops.
-
-**iOS** — an environment variable at `pod install` time, since that is when the
-Podfile is evaluated:
-
-```sh
-APPSONAIR_LOCAL_SDK=1 npm run pods:new
-```
-
-A `:path` declaration wins over the wrapper podspec's `s.dependency` line.
-Re-run `npm run pods:new` without the variable to go back to the published pod.
 
 ## Running
 
@@ -180,22 +142,3 @@ through Node; see the comment in that file.
 **Stale Codegen after switching architecture** — `cd android && ./gradlew clean`.
 Gradle caches the generated `NativeAppsonairApppushSpec`, and a switch without a
 clean is the usual cause of "cannot find symbol".
-
-## Known no-ops
-
-Some buttons intentionally do nothing on one platform — that is the wrapper being
-honest about the native SDKs rather than a bug:
-
-| Button | Behaviour |
-|---|---|
-| `provisional auth (iOS)` | iOS only — resolves without effect on Android |
-| `removeGroup (Android)` | Android only |
-| `set(5)` / `increment()` (badge) | Best-effort on Android — launcher broadcasts, a silent no-op outside Samsung / MIUI / ASUS |
-| `get` (badge) | Android returns the SDK's own persisted count, which can drift from the launcher |
-| `preventDefault()` in `onNotificationWillDisplay` | Honoured on Android only; the event itself fires on both |
-
-See the root README's *Platform differences* table for the full set.
-
-> Both native SDKs are pre-release (`0.0.3-alpha`), but the backend is live: they
-> register the device and sync subscription state — tags, language, opt-in — to
-> `/v1/subscriptions`. Registration is testable end-to-end.

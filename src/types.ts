@@ -63,7 +63,9 @@ export interface PushNotification {
 
   /** Payload `url` — deep link opened on tap. */
   launchUrl: string | null;
-  /** Payload `image_url`. On iOS this loses to `attachments` when both are present. */
+  /**
+   * Payload `image_url` — the legacy combined image key.
+   */
   imageUrl: string | null;
   /** Payload `attachments`. **iOS only** — always `[]` on Android. */
   attachments: NotificationAttachment[];

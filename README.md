@@ -9,7 +9,7 @@ API either way. Nothing in your app code changes.
 > [!WARNING]
 > **Alpha release — not for production use.**
 >
-> `1.0.0-beta` is an early preview, intended for evaluation, prototypes, and
+> `1.0.1-beta` is an early preview, intended for evaluation, prototypes, and
 > internal test builds. Do **not** ship it in a production app or one with a
 > large user base.
 >
@@ -21,7 +21,7 @@ API either way. Nothing in your app code changes.
 > [the notice above](#appsonair-react-native-apppush) before adopting it.
 
 ```sh
-npm install appsonair-react-native-apppush@1.0.0-beta
+npm install appsonair-react-native-apppush@1.0.1-beta
 npx pod-install          # iOS only
 ```
 
@@ -207,6 +207,32 @@ Add the Google Services plugin and your `google-services.json` as you would for
 any FCM app. `POST_NOTIFICATIONS` (Android 13+) is requested for you by
 `requestPermission()`.
 
+<details>
+<summary><b>Notification icon and colour</b> — <code>AndroidManifest.xml</code> meta-data</summary>
+
+Notifications the SDK draws itself (data-only pushes, anything received in the
+foreground, payloads with `actions`) read their own keys. Firebase-drawn
+notifications still read Firebase's, so set both to the same values for a
+consistent look:
+
+```xml
+<application>
+  <meta-data android:name="com.appsonair.apppush.default_notification_icon"
+             android:resource="@drawable/ic_notification" />
+  <meta-data android:name="com.appsonair.apppush.default_notification_color"
+             android:resource="@color/notification_accent" />
+
+  <meta-data android:name="com.google.firebase.messaging.default_notification_icon"
+             android:resource="@drawable/ic_notification" />
+  <meta-data android:name="com.google.firebase.messaging.default_notification_color"
+             android:resource="@color/notification_accent" />
+</application>
+```
+
+A payload's `small_icon` / `bg_color` override these per notification. Without
+either, the SDK falls back to the launcher icon and logs a warning.
+</details>
+
 ---
 
 ## Recipes
@@ -384,7 +410,7 @@ and no bridge can honestly hide it. Each cites its row in
 |---|---|
 | **`preventDefault()`** (F7) | **Android only.** Android calls foreground listeners on FCM's background thread, so the bridge can wait for your handler. iOS returns presentation options synchronously — the notification is already on screen by the time JS runs. The event fires on both. |
 | **`canRequestPermission()`** (E2) | iOS returns `true` only before the user has ever been asked. **Android returns `true` whenever permission isn't granted, including after a permanent denial.** Don't use it to decide whether to show a pre-prompt cross-platform. |
-| **`user.addEmail()`** (A5) | Android persists emails but never reads them back on restart, so they're lost on relaunch. Needs an SDK fix. |
+| **`user.addEmail()`** (A5) | Both sync to the backend subscription. **Android keeps one email per subscription** — a second `addEmail()` replaces the first; iOS keeps a list. |
 | **Badges** (G1, G3) | iOS uses the OS API. Android uses launcher broadcasts that **silently do nothing outside Samsung / MIUI / ASUS**, and `badge.get()` returns the SDK's own persisted count, which can drift from what's on screen. |
 | **`user.getTags()`** | Both are backend-backed, but refresh differently. **Android fetches on every call**, so it sees other devices' writes immediately and can reject on network failure. **iOS reads a local cache** the SDK refreshes on `initialize()`, on first registration, on `login()`, and on every tag write — so a tag set elsewhere mid-session lands on iOS only after one of those. Neither call fetches before the device has registered; both fall back to the local cache. |
 | **`user.getOptedIn()`** | Android reads the stored value from `/subscriptions`; iOS computes the flag it would send, which also requires OS permission. Revoking permission in Settings flips iOS to `false` while Android still reports the server's value. Both differ from `getPushSubscription().optedIn`, which is purely local on both. |

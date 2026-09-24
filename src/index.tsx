@@ -408,11 +408,7 @@ export const user = {
   },
 
   /**
-   * Adds an email identifier.
-   *
-   * Parity A5 — **known Android bug.** Android persists emails but never reads
-   * them back on restart, so an email added here silently vanishes when the app
-   * relaunches. The wrapper cannot work around it; it needs an SDK fix.
+   * Adds an email identifier and syncs it to the backend subscription.
    */
   addEmail(address: string): Promise<void> {
     requireNonEmpty(address, 'email address');

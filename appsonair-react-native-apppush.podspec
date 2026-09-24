@@ -37,7 +37,7 @@ Pod::Spec.new do |s|
   #   pod 'AppsOnAir-AppPush', :path => '../../appsonair-ios-push-notification'
   #
   # See the README's iOS installation section.
-  s.dependency 'AppsOnAir-AppPush', '1.0.1-beta'
+  s.dependency 'AppsOnAir-AppPush', '1.0.2-beta'
 
   # Compensates for a missing version floor upstream, and is not redundant with
   # the line above: AppsOnAir-AppPush.podspec declares `core.dependency

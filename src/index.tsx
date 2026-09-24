@@ -57,9 +57,13 @@ const NativePush: Spec =
   ) as Spec);
 
 const emitter = new NativeEventEmitter(
-  // The legacy bridge needs the module instance to route `addListener`;
-  // the New Architecture ignores this argument entirely.
-  NativeModules.AppsonairReactNativeApppush ?? undefined
+  // iOS asserts this is non-null on both architectures, and uses it to route
+  // addListener/removeListeners. Pass the module resolved above rather than
+  // re-reading NativeModules: in bridgeless mode NativeModules can be empty even
+  // when TurboModuleRegistry found the module. If it is not linked at all this is
+  // the Proxy, so subscribing throws LINKING_ERROR instead of an Invariant
+  // Violation at import time that blocks AppRegistry.registerComponent.
+  NativePush as ConstructorParameters<typeof NativeEventEmitter>[0]
 );
 
 // MARK: - Event names

@@ -99,9 +99,10 @@ android {
   kotlinOptions {
     jvmTarget = "17"
 
-    // WORKAROUND -- remove once the native SDK is republished.
+    // WORKAROUND -- remove once the native SDK is republished with a floor.
+    // Still needed as of 1.0.1-beta.
     //
-    // appsonair-android-push-notification:1.0.0-beta is compiled with Kotlin
+    // appsonair-android-push-notification:1.0.1-beta is compiled with Kotlin
     // 2.2.10 and sets no languageVersion/apiVersion floor, so its classes carry
     // metadata 2.2.0. React Native pins the Kotlin compiler per release -- 1.9.24
     // on RN 0.76, 2.0.21 on 0.77-0.78, 2.1.x on 0.79-0.81 -- and none of those can

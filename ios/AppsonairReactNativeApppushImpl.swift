@@ -512,11 +512,10 @@ extension AppsonairReactNativeApppushImpl: PushListener {
   }
 
   public func onNotificationOpened(notification: PushNotification) {
-    emit(Event.notificationOpened, [
-      "notification": Self.serialize(notification),
-      "actionId": NSNull(),
-      "url": notification.launchUrl as Any
-    ])
+    // Intentionally empty. The SDK calls this straight after the click listener
+    // (onClick below) for the same tap, so emitting here too delivered every tap
+    // to JS twice -- the second time with actionId nil, which read as a body tap
+    // even for an action button. onClick is the single source of the event.
   }
 
   public func onError(_ error: PushError) {

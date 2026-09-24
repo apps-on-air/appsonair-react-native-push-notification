@@ -194,22 +194,19 @@ class AppsonairReactNativeApppushModuleImpl(
         })
       }
 
-      override fun onNotificationOpened(notification: PushNotification) {
-        emit(EVENT_NOTIFICATION_OPENED, Arguments.createMap().apply {
-          putMap("notification", notification.toWritableMap())
-          putNull("actionId")
-          putString("url", notification.data["url"])
-        })
-      }
+      // onNotificationOpened is deliberately not overridden: the SDK calls it
+      // straight after the click listener below for the same tap, so emitting
+      // here too delivered every tap to JS twice -- the second time with
+      // actionId null, which read as a body tap even for an action button.
 
       override fun onError(error: PushError) {
         emit(EVENT_ERROR, error.toWritableMap())
       }
     })
 
-    // The click listener carries the action button id, which PushListener.onNotificationOpened
-    // does not. Both fire for a tap, so this one wins for action-button taps and
-    // the plain listener above covers body taps on SDK paths that skip click listeners.
+    // The single source of onNotificationOpened. The SDK fires click listeners on every
+    // tap -- body (actionId null) and action button alike -- and, unlike
+    // PushListener.onNotificationOpened, they carry the action id.
     PushNotifications.addClickListener(object : INotificationClickListener {
       override fun onClick(event: NotificationClickEvent) {
         emit(EVENT_NOTIFICATION_OPENED, Arguments.createMap().apply {

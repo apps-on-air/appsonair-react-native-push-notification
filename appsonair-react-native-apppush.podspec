@@ -37,20 +37,7 @@ Pod::Spec.new do |s|
   #   pod 'AppsOnAir-AppPush', :path => '../../appsonair-ios-push-notification'
   #
   # See the README's iOS installation section.
-  s.dependency 'AppsOnAir-AppPush', '1.0.2-beta'
-
-  # Compensates for a missing version floor upstream, and is not redundant with
-  # the line above: AppsOnAir-AppPush.podspec declares `core.dependency
-  # 'AppsOnAir-Core'` with no constraint, while the SDK's own Package.swift
-  # requires `from: "1.2.3"` and its AppsOnAirDeviceInfo calls
-  # AppsOnAirCoreServices.getDeviceMetadata(), which only exists in 1.2.x.
-  #
-  # A fresh `pod install` resolves the newest Core and is fine either way. The
-  # case this covers is a host app that already carries an older Core in its
-  # Podfile.lock -- likely if it also uses AppLink, AppSync or AppRemark -- where
-  # an unconstrained dependency is satisfied by 1.1.1 and the SDK then fails to
-  # compile. Remove once the upstream podspec carries its own floor.
-  s.dependency 'AppsOnAir-Core', '>= 1.2.3'
+  s.dependency 'AppsOnAir-AppPush', '1.0.3-beta'
 
   # Installs the React dependencies, and on RN >= 0.71 wires up the New
   # Architecture (Codegen output, Folly, ReactCommon) when it is enabled. The

@@ -1,8 +1,6 @@
 #import "AppsonairReactNativeApppush.h"
 
-// The Swift half. Under CocoaPods the pod's module name is pinned to
-// AppsonairReactNativeApppush in the podspec, so this header name is stable; the
-// bracket form is the fallback for build setups that expose it as a framework.
+// The Swift half. The bracket form covers builds that package the pod as a framework.
 #if __has_include("AppsonairReactNativeApppush-Swift.h")
 #import "AppsonairReactNativeApppush-Swift.h"
 #else
@@ -10,29 +8,14 @@
 #endif
 
 /**
- * Every method below is written once and serves both architectures.
- *
- * RCT_EXPORT_METHOD builds the selector from the JS method name and the argument
- * labels, which is exactly how Codegen derives the NativeAppsonairApppushSpec
- * protocol selectors. So `RCT_EXPORT_METHOD(login:(NSString *)externalId
- * resolve:...)` produces `login:resolve:reject:` -- the same selector the
- * protocol declares. Under the New Architecture the implementation satisfies the
- * protocol; under the Old one the macro registers it with the bridge. Neither
- * path needs a second body.
- *
- * The one thing that must hold for this to keep working: argument labels here
- * have to match the parameter names in src/NativeAppsonairApppush.ts exactly. A
- * rename on either side silently breaks the New Architecture build.
+ * Each RCT_EXPORT_METHOD serves both architectures: it produces the same selector
+ * the Codegen spec declares. Argument labels must match the parameter names in
+ * src/NativeAppsonairApppush.ts exactly, or the New Architecture build breaks.
  */
 /**
- * Runs at image load, before main(). The SDK has to be initialised while the app
- * is still launching -- see initializeAtLaunch -- and waiting for JS is too late,
- * so this is the one piece of the bridge that does not start from a JS call.
- * UIApplicationDidFinishLaunchingNotification is posted straight after the
- * host's application:didFinishLaunchingWithOptions: returns, so no AppDelegate
- * change is needed in the host app.
- *
- * A constructor rather than +load, which RCT_EXPORT_MODULE() already defines.
+ * Starts the SDK right after the host's didFinishLaunchingWithOptions: returns,
+ * without any AppDelegate code (see initializeAtLaunch for why JS is too late).
+ * A constructor because RCT_EXPORT_MODULE() already defines +load.
  */
 __attribute__((constructor)) static void AppsonairPushObserveLaunch(void)
 {
@@ -60,11 +43,8 @@ RCT_EXPORT_MODULE()
   if (self = [super init]) {
     _impl = [AppsonairReactNativeApppushImpl shared];
 
-    // Events raised before JS subscribes would trip RCTEventEmitter's
-    // "sending event with no listeners" warning, so they are dropped here rather
-    // than queued -- a token or permission change that arrives before the first
-    // listener is re-readable through the corresponding getter. The one
-    // exception, a notification tap, is held by the impl until JS is ready.
+    // Events before JS subscribes are dropped (their state can be read via the
+    // getters). Notification taps are the exception: the impl holds them.
     __weak __typeof(self) weakSelf = self;
     [_impl attach:self sink:^(NSString *name, NSDictionary *body) {
       __strong __typeof(weakSelf) strongSelf = weakSelf;
@@ -76,8 +56,7 @@ RCT_EXPORT_MODULE()
   return self;
 }
 
-/// The SDK is @MainActor-isolated and its initialize() touches UIKit, so the
-/// module must be constructed on the main queue.
+/// The SDK is main-actor only.
 + (BOOL)requiresMainQueueSetup
 {
   return YES;
@@ -94,9 +73,7 @@ RCT_EXPORT_MODULE()
     @"AppsonairPush:onSubscriptionChanged",
     @"AppsonairPush:onUserStateChanged",
     @"AppsonairPush:onSilentNotification",
-    // Declared but never emitted here: the Firebase Installation ID is an Android
-    // concept (parity B2). The list is kept identical to Android's so the two
-    // bridges stay diffable; RCTEventEmitter does not mind an unused entry.
+    // Android only (Firebase Installation ID); listed to match Android's event list.
     @"AppsonairPush:onInstallationIdUpdated",
     @"AppsonairPush:onError"
   ];
@@ -506,9 +483,7 @@ RCT_EXPORT_METHOD(completeNotificationWillDisplay:(NSString *)notificationId
 
 #pragma mark - TurboModule
 
-// addListener: / removeListeners: are inherited from RCTEventEmitter, whose
-// signatures already match the ones Codegen declares on the spec protocol, so
-// there is nothing to add for them here.
+// addListener: / removeListeners: come from RCTEventEmitter.
 
 #ifdef RCT_NEW_ARCH_ENABLED
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:

@@ -7,19 +7,9 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.module.annotations.ReactModule
 
 /**
- * New Architecture module.
- *
- * Extends the Codegen-generated `NativeAppsonairApppushSpec`, so the method set here
- * is checked against src/NativeAppsonairApppush.ts at compile time -- adding a method
- * to the spec without implementing it will fail the build.
- *
- * Every method delegates to [AppsonairReactNativeApppushModuleImpl], which is shared
- * verbatim with the Old Architecture module in src/oldarch. Nothing but the base
- * class and the parameter types differ between the two.
- *
- * Note the `double` parameters: Codegen maps the TypeScript `number` type to
- * `double`, never `int`, so the conversion to `Int` happens here rather than in
- * the shared implementation.
+ * New Architecture module. Methods are checked against the Codegen spec at compile
+ * time and delegate to [AppsonairReactNativeApppushModuleImpl]. Codegen maps JS
+ * `number` to `double`, so conversions to `Int` happen here.
  */
 @ReactModule(name = AppsonairReactNativeApppushModuleImpl.NAME)
 class AppsonairReactNativeApppushModule(reactContext: ReactApplicationContext) :
@@ -188,10 +178,7 @@ class AppsonairReactNativeApppushModule(reactContext: ReactApplicationContext) :
     promise: Promise
   ) = impl.completeNotificationWillDisplay(notificationId, display, promise)
 
-  // MARK: NativeEventEmitter plumbing
-  //
-  // Required by the spec. RCTDeviceEventEmitter delivers the events, so there is
-  // no per-listener bookkeeping to do here.
+  // MARK: NativeEventEmitter plumbing (required by the spec; nothing to do)
 
   override fun addListener(eventName: String) = Unit
 

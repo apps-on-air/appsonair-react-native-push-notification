@@ -2,54 +2,22 @@ import { TurboModuleRegistry, type TurboModule } from 'react-native';
 import type { UnsafeObject } from 'react-native/Libraries/Types/CodegenTypes';
 
 /**
- * Codegen spec for the AppsOnAir Push TurboModule.
+ * Codegen spec for the native module. The Old Architecture modules implement the
+ * same methods by hand, so keep them in sync.
  *
- * This file is consumed by React Native Codegen and compiles to
- * `NativeAppsonairApppushSpec` — a Java abstract class and an ObjC protocol that
- * the native modules implement under the New Architecture. On the Old
- * Architecture the same JS object is served by the legacy bridge module, which
- * exposes an identical method set (see android/src/oldarch and the
- * `RCT_NEW_ARCH_ENABLED` guard in ios/AppsonairReactNativeApppush.mm).
- *
- * Constraints this file must respect — codegen rejects or silently mistypes
- * anything else, so do not "improve" the signatures below:
- *
- *   - Parameters and returns are primitives, nullable primitives, `Array<T>`,
- *     or `UnsafeObject`. Named object types are avoided deliberately -- see the
- *     note above `Spec`.
- *   - No string-literal unions. `logLevel`, `importance` and `environment` are
- *     plain `string` here and are narrowed to their union types in `index.tsx`,
- *     which is the type-safe surface consumers actually import.
- *   - No `Record<K, V>` — use `UnsafeObject`.
- *   - Methods are `Promise`-returning or `void`; there are no sync methods, so
- *     the module never blocks the JS thread.
+ * Codegen limits: use only primitives, `Array<T>` and `UnsafeObject` (no named
+ * object types, string unions or `Record`). Public types live in types.ts/index.tsx.
  */
 
 /**
- * Object parameters are `UnsafeObject`, not named object types, and that is
- * load-bearing rather than lazy.
- *
- * Codegen compiles a named object type into a generated C++ struct, so the
- * ObjC signature becomes `JS::NativeAppsonairApppush::NativePushConfig &` under the
- * New Architecture while the Old Architecture bridge still passes
- * `NSDictionary *`. The two would no longer share a selector, and
- * ios/AppsonairReactNativeApppush.mm could not implement both from one method body.
- * `UnsafeObject` maps to `NSDictionary *` on both, and to `ReadableMap` on both
- * on Android.
- *
- * The shapes these accept are typed for consumers in src/types.ts -- `PushConfig`,
- * `NotificationChannelConfig` and `BackgroundSyncOptions` -- which is the surface
- * anyone actually imports. Nothing here is untyped at the call site.
+ * Objects are `UnsafeObject` on purpose: a named type becomes a C++ struct on the
+ * New Architecture, and the .mm could no longer serve both architectures with one
+ * method. Their shapes are typed in src/types.ts.
  */
 
 export interface Spec extends TurboModule {
   // MARK: Lifecycle
 
-  /**
-   * Parity A1/A2: the native signatures share zero parameters — iOS takes
-   * `(debug:swizzle:)`, Android takes `(context, debug)`. Each
-   * bridge supplies what its platform needs; `Context` is never exposed to JS.
-   */
   initialize(config: UnsafeObject): Promise<void>;
 
   // MARK: Identity
@@ -65,11 +33,11 @@ export interface Spec extends TurboModule {
 
   /** APNs hex token on iOS, FCM token on Android. `null` before registration. */
   getToken(): Promise<string | null>;
-  /** Parity D4: Android/FCM only. Resolves immediately as a no-op on iOS. */
+  /** Android only. No-op on iOS. */
   refreshToken(): Promise<void>;
-  /** Parity B2: Android only. Resolves `null` on iOS. */
+  /** Android only. `null` on iOS. */
   getInstallationId(): Promise<string | null>;
-  /** Parity C8: iOS only. Resolves `null` on Android. */
+  /** iOS only. `null` on Android. */
   getApnsEnvironment(): Promise<string | null>;
 
   // MARK: Permissions
@@ -78,7 +46,7 @@ export interface Spec extends TurboModule {
   getPermission(): Promise<boolean>;
   getPermissionStatus(): Promise<string>;
   canRequestPermission(): Promise<boolean>;
-  /** Parity E5: iOS only. Resolves as a no-op on Android. */
+  /** iOS only. No-op on Android. */
   registerForProvisionalAuthorization(): Promise<void>;
 
   // MARK: Notifications
@@ -86,11 +54,11 @@ export interface Spec extends TurboModule {
   clearAllNotifications(): Promise<void>;
   removeNotification(notificationId: string): Promise<void>;
   removeNotifications(notificationIds: Array<string>): Promise<void>;
-  /** Parity F3: Android only. Resolves as a no-op on iOS. */
+  /** Android only. No-op on iOS. */
   removeNotificationGroup(groupKey: string): Promise<void>;
-  /** Parity F4: Android only. Resolves as a no-op on iOS. */
+  /** Android only. No-op on iOS. */
   createNotificationChannel(config: UnsafeObject): Promise<void>;
-  /** Parity F4: Android only. Resolves as a no-op on iOS. */
+  /** Android only. No-op on iOS. */
   deleteNotificationChannel(channelId: string): Promise<void>;
 
   // MARK: Badges
@@ -99,7 +67,7 @@ export interface Spec extends TurboModule {
   setBadgeCount(count: number): Promise<void>;
   incrementBadgeCount(delta: number): Promise<number>;
   clearBadgeCount(): Promise<void>;
-  /** Parity G4: iOS only. Resolves as a no-op on Android. */
+  /** iOS only. No-op on Android. */
   setAutoClearBadgeOnForeground(enabled: boolean): Promise<void>;
 
   // MARK: APNs registration
@@ -161,13 +129,7 @@ export interface Spec extends TurboModule {
 
   // MARK: Foreground display control
 
-  /**
-   * Answers a pending `onNotificationWillDisplay` event. The native side holds
-   * the notification until this lands or the timeout elapses, which is what
-   * makes `preventDefault()` work across an async bridge.
-   *
-   * Not called directly — `onNotificationWillDisplay` wires it up.
-   */
+  /** Answers `onNotificationWillDisplay` (called internally for `preventDefault()`). */
   completeNotificationWillDisplay(
     notificationId: string,
     display: boolean
@@ -175,10 +137,7 @@ export interface Spec extends TurboModule {
 
   // MARK: NativeEventEmitter plumbing
 
-  /**
-   * Required by `NativeEventEmitter` on both architectures. Under the New
-   * Architecture these also satisfy the TurboModule event-emitter contract.
-   */
+  /** Required by `NativeEventEmitter`. */
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }

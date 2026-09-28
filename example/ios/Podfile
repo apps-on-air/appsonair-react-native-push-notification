@@ -17,16 +17,8 @@ end
 target 'AppsOnAirPushExample' do
   config = use_native_modules!
 
-  # --- Local native SDK wiring (opt-in, for SDK development) ------------------
-  # By default the example resolves AppsOnAir-AppPush 1.0.3-beta from the
-  # CocoaPods trunk, exactly like a host app does -- the wrapper's podspec
-  # declares it, so nothing is needed here.
-  #
-  # To build against a sibling checkout of the iOS SDK instead:
-  #
+  # Optional: build against a local iOS SDK checkout with
   #   APPSONAIR_LOCAL_SDK=1 npm run pods:new
-  #
-  # A `:path` declaration takes precedence over the wrapper podspec's dependency.
   if ENV['APPSONAIR_LOCAL_SDK'] == '1'
     Pod::UI.puts 'AppsOnAir: using the local iOS SDK checkout'.yellow
     pod 'AppsOnAir-AppPush', :path => '../../../appsonair-ios-push-notification'
@@ -62,29 +54,16 @@ target 'AppsOnAirPushExample' do
       end
     end
 
-    # --- Swift runtime search paths for an ObjC-only app target ---------------
-    # This wrapper, and the AppsOnAir SDKs under it, are Swift static libraries.
-    # This app target has no Swift source of its own (AppDelegate.mm, main.m), so
-    # Xcode does not add the Swift runtime library search paths and the Old
-    # Architecture link fails with:
-    #
-    #   Undefined symbols: __swift_FORCE_LOAD_$_swiftCompatibility56
-    #     referenced from libAppsOnAir-Core.a, libAppsOnAir-AppPush.a,
-    #     libReachabilitySwift.a, libappsonair-react-native-apppush.a
-    #
-    # The New Architecture links without this only because other Swift-bearing
-    # pods happen to pull the paths in -- which is luck, not design.
-    #
-    # A host app can equivalently fix this by adding any empty .swift file (plus
-    # the bridging header Xcode offers to create) to its own app target. See the
-    # README's iOS section.
+    # The app target has no Swift files, so Xcode doesn't add the Swift runtime
+    # search paths and linking the Swift pods fails on the Old Architecture
+    # (`__swift_FORCE_LOAD_$_swiftCompatibility56`). An empty .swift file in the
+    # app target fixes it too.
     installer.aggregate_targets.each do |aggregate_target|
       aggregate_target.user_project.native_targets.each do |target|
         target.build_configurations.each do |build_config|
           build_config.build_settings['LIBRARY_SEARCH_PATHS'] = [
             '$(inherited)',
-            # DT_TOOLCHAIN_DIR, not TOOLCHAIN_DIR: the latter resolves to the
-            # Metal toolchain under Xcode 26 and the path does not exist.
+            # DT_TOOLCHAIN_DIR: TOOLCHAIN_DIR points at the Metal toolchain in Xcode 26.
             '$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)',
             '/usr/lib/swift'
           ]

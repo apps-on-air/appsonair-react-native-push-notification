@@ -9,19 +9,9 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.module.annotations.ReactModule
 
 /**
- * Old Architecture (Bridge) module.
- *
- * Same class name and package as the New Architecture module in src/newarch --
- * build.gradle puts exactly one of the two on the compile path, so the JS side
- * resolves the same module name either way and never learns which is in use.
- *
- * The method set is kept in lockstep with src/NativeAppsonairApppush.ts by hand;
- * there is no Codegen here to check it. When adding a method, add it to the spec,
- * to this class, and to the newarch class together.
- *
- * `double` parameters match the New Architecture signatures deliberately: the
- * bridge would accept `Int`, but keeping both classes identical means the shared
- * implementation sees one calling convention.
+ * Old Architecture module. Nothing checks it against src/NativeAppsonairApppush.ts,
+ * so when adding a method, add it to the spec, this class and the newarch class.
+ * `double` parameters match the New Architecture signatures.
  */
 @ReactModule(name = AppsonairReactNativeApppushModuleImpl.NAME)
 class AppsonairReactNativeApppushModule(reactContext: ReactApplicationContext) :
@@ -236,10 +226,7 @@ class AppsonairReactNativeApppushModule(reactContext: ReactApplicationContext) :
     promise: Promise
   ) = impl.completeNotificationWillDisplay(notificationId, display, promise)
 
-  // MARK: NativeEventEmitter plumbing
-  //
-  // NativeEventEmitter warns on the Old Architecture if the module does not
-  // declare these, even though RCTDeviceEventEmitter needs no bookkeeping.
+  // MARK: NativeEventEmitter plumbing (declared to avoid a NativeEventEmitter warning)
 
   @ReactMethod
   fun addListener(eventName: String) = Unit

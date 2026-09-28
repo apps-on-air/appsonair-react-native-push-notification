@@ -40,17 +40,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The whole Android bridge implementation.
- *
- * Both architectures share this class verbatim -- the New and Old Architecture
- * module classes in src/newarch and src/oldarch are thin subclasses that differ
- * only in what they extend. Keeping every behaviour here is what makes "supports
- * both architectures" a build-configuration detail rather than two codebases.
- *
- * Threading: the native SDK posts its callbacks to the main thread already, and
- * every method below is either a plain property read or a call the SDK itself
- * marshals, so this class does no dispatching of its own -- except for the one
- * documented latch in [onWillDisplay].
+ * The Android bridge implementation, shared by the New and Old Architecture modules.
+ * The SDK handles its own threading, so nothing here dispatches except [onWillDisplay].
  */
 class AppsonairReactNativeApppushModuleImpl(
   private val reactContext: ReactApplicationContext
@@ -59,8 +50,7 @@ class AppsonairReactNativeApppushModuleImpl(
   companion object {
     const val NAME = "AppsonairReactNativeApppush"
 
-    // Event names. These strings are duplicated in src/index.tsx and in the iOS
-    // bridge -- a rename has to land in all three at once.
+    // Also defined in src/index.tsx and the iOS bridge; keep all three in sync.
     private const val EVENT_TOKEN_UPDATED = "AppsonairPush:onTokenUpdated"
     private const val EVENT_NOTIFICATION_RECEIVED = "AppsonairPush:onNotificationReceived"
     private const val EVENT_NOTIFICATION_OPENED = "AppsonairPush:onNotificationOpened"
@@ -73,12 +63,8 @@ class AppsonairReactNativeApppushModuleImpl(
     private const val EVENT_ERROR = "AppsonairPush:onError"
 
     /**
-     * How long [onWillDisplay] blocks waiting for JS to answer.
-     *
-     * The SDK calls foreground lifecycle listeners on FCM's background thread,
-     * whose process window is about 10 seconds, so a bounded wait well inside
-     * that is safe. On timeout the notification displays -- failing open, because
-     * a dropped notification is worse than an unsuppressed one.
+     * How long [onWillDisplay] waits for JS (well inside FCM's ~10 s window).
+     * On timeout the notification is shown.
      */
     private const val WILL_DISPLAY_TIMEOUT_MS = 2_000L
   }
@@ -90,18 +76,15 @@ class AppsonairReactNativeApppushModuleImpl(
 
   // MARK: - preventDefault plumbing
   //
-  // Parity F7: the SDK expects preventDefault() to be called synchronously inside
-  // onWillDisplay, but the JS handler is an async bridge hop away. Each pending
-  // notification therefore parks its native thread on a latch that JS releases
-  // via completeNotificationWillDisplay().
+  // The SDK needs preventDefault() synchronously, but JS answers asynchronously, so
+  // each notification waits on a latch released by completeNotificationWillDisplay().
 
   private val pendingWillDisplay = ConcurrentHashMap<String, CountDownLatch>()
   private val willDisplayDecision = ConcurrentHashMap<String, Boolean>()
 
   // MARK: - Installation ID
   //
-  // The SDK's getInstallationId() returns Unit and delivers the value through
-  // PushListener.onInstallationIdUpdated, so promises park here until it lands.
+  // The SDK returns the id via onInstallationIdUpdated, so promises wait here.
 
   private val pendingInstallationIdPromises = mutableListOf<Promise>()
   private var cachedInstallationId: String? = null
@@ -121,18 +104,13 @@ class AppsonairReactNativeApppushModuleImpl(
     try {
       val debug = config?.takeIf { it.hasKey("debug") }?.getBoolean("debug") ?: false
 
-      // Parity A1/A2: Android needs a Context that JS must never see, and has no
-      // appGroupId concept -- that key is read only by the iOS bridge.
       AppPushService.initialize(reactContext.applicationContext, debug)
 
       registerSdkListeners()
       registerActivityHooks()
 
-      // Parity A3: a cold start delivers the tap through the launch Intent. The
-      // SDK's own ActivityLifecycleCallbacks cover onActivityCreated, but the
-      // React Activity is typically already created by the time JS calls
-      // initialize(), so replay the current Intent here. handleNotificationTapIntent
-      // is documented idempotent, so a double delivery is not possible.
+      // A tap that launched the app arrives in the launch Intent before JS runs, so
+      // replay it here. handleNotificationTapIntent ignores duplicates.
       reactContext.currentActivity?.intent?.let {
         AppPushService.handleNotificationTapIntent(it)
       }
@@ -143,12 +121,7 @@ class AppsonairReactNativeApppushModuleImpl(
     }
   }
 
-  /**
-   * Parity A3: without this the host app would have to call
-   * handleNotificationTapIntent() from MainActivity.onNewIntent() by hand, and a
-   * warm-start tap would be silently lost if it forgot. Registering RN's own
-   * ActivityEventListener absorbs that requirement into the wrapper.
-   */
+  /** Handles taps while the app is running, so MainActivity.onNewIntent() needs no code. */
   private fun registerActivityHooks() {
     reactContext.addActivityEventListener(object : ActivityEventListener {
       override fun onActivityResult(
@@ -171,8 +144,7 @@ class AppsonairReactNativeApppushModuleImpl(
       override fun onTokenUpdated(token: String) {
         emit(EVENT_TOKEN_UPDATED, Arguments.createMap().apply {
           putString("token", token)
-          // Parity B1/C8: FCM routes for you, so there is no sandbox/production
-          // split to report. iOS fills this in.
+          // iOS only (APNs sandbox/production).
           putNull("environment")
         })
       }
@@ -194,19 +166,14 @@ class AppsonairReactNativeApppushModuleImpl(
         })
       }
 
-      // onNotificationOpened is deliberately not overridden: the SDK calls it
-      // straight after the click listener below for the same tap, so emitting
-      // here too delivered every tap to JS twice -- the second time with
-      // actionId null, which read as a body tap even for an action button.
+      // onNotificationOpened isn't overridden: the click listener below already emits each tap.
 
       override fun onError(error: PushError) {
         emit(EVENT_ERROR, error.toWritableMap())
       }
     })
 
-    // The single source of onNotificationOpened. The SDK fires click listeners on every
-    // tap -- body (actionId null) and action button alike -- and, unlike
-    // PushListener.onNotificationOpened, they carry the action id.
+    // Emits onNotificationOpened for body taps (actionId null) and action buttons.
     PushNotifications.addClickListener(object : INotificationClickListener {
       override fun onClick(event: NotificationClickEvent) {
         emit(EVENT_NOTIFICATION_OPENED, Arguments.createMap().apply {
@@ -260,9 +227,7 @@ class AppsonairReactNativeApppushModuleImpl(
       }
     })
 
-    // Parity F5: Android renders every data push as a visible notification, so
-    // this fires only for payloads the SDK recognises as silent. Wired anyway
-    // because the hook exists and costs nothing.
+    // Rare on Android: fires only for payloads the SDK treats as silent.
     AppPushService.onSilentPushReceived = { data ->
       emit(EVENT_SILENT_NOTIFICATION, Arguments.createMap().apply {
         putMap("data", Arguments.createMap().apply {
@@ -275,8 +240,7 @@ class AppsonairReactNativeApppushModuleImpl(
   private fun onWillDisplay(event: NotificationWillDisplayEvent) {
     val id = event.notification.id
     if (id == null) {
-      // Nothing to correlate the JS answer against, so do not block -- just
-      // inform JS and let the notification display.
+      // No id to match JS's answer against, so just show the notification.
       emit(EVENT_NOTIFICATION_WILL_DISPLAY, Arguments.createMap().apply {
         putMap("notification", event.notification.toWritableMap())
       })
@@ -352,7 +316,7 @@ class AppsonairReactNativeApppushModuleImpl(
     }
   }
 
-  /** Parity C8: an APNs concept with no FCM equivalent. */
+  /** iOS only. */
   fun getApnsEnvironment(promise: Promise) = promise.resolve(null)
 
   // MARK: - Permissions
@@ -360,8 +324,7 @@ class AppsonairReactNativeApppushModuleImpl(
   fun requestPermission(fallbackToSettings: Boolean, promise: Promise) {
     val activity = reactContext.currentActivity
     if (activity == null) {
-      // Parity E1: the native call would throw without an Activity. Reject with
-      // something actionable instead of crashing the app.
+      // The SDK needs an Activity; reject instead of crashing.
       promise.reject(
         "noActivity",
         "requestPermission() needs a foreground Activity. Call it after the app is visible."
@@ -369,10 +332,7 @@ class AppsonairReactNativeApppushModuleImpl(
       return
     }
 
-    // The SDK's request is fire-and-forget: the outcome arrives either through the
-    // permission observer or, if the user dismissed without changing anything, not
-    // at all. Resolving on the next host resume covers both -- the permission
-    // dialog always resumes the Activity when it closes.
+    // The SDK doesn't return the result, so resolve when the Activity resumes after the dialog closes.
     val settled = AtomicBoolean(false)
     fun settle() {
       if (settled.compareAndSet(false, true)) {
@@ -383,8 +343,7 @@ class AppsonairReactNativeApppushModuleImpl(
     val resumeListener = object : LifecycleEventListener {
       override fun onHostResume() {
         reactContext.removeLifecycleEventListener(this)
-        // One frame of slack so the OS has written the new grant state before it
-        // is read back.
+        // Wait one frame so the OS has saved the new permission state.
         mainHandler.post { settle() }
       }
 
@@ -406,10 +365,7 @@ class AppsonairReactNativeApppushModuleImpl(
   fun getPermission(promise: Promise) =
     resolving(promise) { PushNotifications.permission(reactContext) }
 
-  /**
-   * Parity C7: Android has no granular permission type, so only two of the five
-   * cross-platform values are reachable here.
-   */
+  /** Android can only report `authorized` or `denied`. */
   fun getPermissionStatus(promise: Promise) = resolving(promise) {
     if (PushNotifications.permission(reactContext)) "authorized" else "denied"
   }
@@ -417,7 +373,7 @@ class AppsonairReactNativeApppushModuleImpl(
   fun canRequestPermission(promise: Promise) =
     resolving(promise) { PushNotifications.canRequestPermission(reactContext) }
 
-  /** Parity E5: iOS provisional authorization has no Android equivalent. */
+  /** iOS only. */
   fun registerForProvisionalAuthorization(promise: Promise) = promise.resolve(null)
 
   // MARK: - Notifications
@@ -430,7 +386,7 @@ class AppsonairReactNativeApppushModuleImpl(
       PushNotifications.removeNotification(reactContext, notificationId)
     }
 
-  /** Parity F3: iOS removes a list natively; Android has no bulk call, so loop. */
+  /** Android has no bulk remove, so loop. */
   fun removeNotifications(notificationIds: ReadableArray, promise: Promise) =
     resolvingUnit(promise) {
       for (i in 0 until notificationIds.size()) {
@@ -472,8 +428,7 @@ class AppsonairReactNativeApppushModuleImpl(
     "low" -> NotificationManager.IMPORTANCE_LOW
     "default" -> NotificationManager.IMPORTANCE_DEFAULT
     "max" -> NotificationManager.IMPORTANCE_MAX
-    // The native default is IMPORTANCE_HIGH; keep that for "high" and for anything
-    // unrecognised so a typo does not silence a channel.
+    // Unknown values fall back to HIGH (the SDK default) so a typo doesn't silence a channel.
     else -> NotificationManager.IMPORTANCE_HIGH
   }
 
@@ -484,11 +439,7 @@ class AppsonairReactNativeApppushModuleImpl(
   fun setBadgeCount(count: Int, promise: Promise) =
     resolvingUnit(promise) { AppPushService.setBadgeCount(reactContext, count) }
 
-  /**
-   * Parity G2: Android has no native increment, so read -> add -> set. The read
-   * is the SDK's own persisted value, which is the same value set() writes, so
-   * the arithmetic is consistent even where the launcher ignores the broadcast.
-   */
+  /** Android has no native increment, so read, add and set the SDK's stored count. */
   fun incrementBadgeCount(delta: Int, promise: Promise) = resolving(promise) {
     val next = (AppPushService.getBadgeCount() + delta).coerceAtLeast(0)
     AppPushService.setBadgeCount(reactContext, next)
@@ -498,13 +449,10 @@ class AppsonairReactNativeApppushModuleImpl(
   fun clearBadgeCount(promise: Promise) =
     resolvingUnit(promise) { AppPushService.clearBadgeCount(reactContext) }
 
-  /** Parity G4: an iOS-only behaviour. */
+  /** iOS only. */
   fun setAutoClearBadgeOnForeground(enabled: Boolean, promise: Promise) = promise.resolve(null)
 
-  /**
-   * iOS-only. APNs registration can be deferred; FCM registration cannot -- the
-   * Firebase SDK obtains a token on its own schedule regardless.
-   */
+  /** iOS only: Firebase always fetches a token by itself. */
   fun setAutoRegisterForRemoteNotifications(enabled: Boolean, promise: Promise) =
     promise.resolve(null)
 
@@ -523,8 +471,7 @@ class AppsonairReactNativeApppushModuleImpl(
     resolvingUnit(promise) { PushUser.removeTags(keys.toStringList()) }
 
   fun getTags(promise: Promise) {
-    // Not resolving(): getTags() fetches from the backend, so the tags arrive in a callback
-    // rather than as a return value and the promise has to be resolved from inside it.
+    // Tags come back in a callback, so resolve the promise there.
     try {
       PushUser.getTags { tags ->
         promise.resolve(Arguments.createMap().apply {
@@ -572,9 +519,8 @@ class AppsonairReactNativeApppushModuleImpl(
   fun optOut(promise: Promise) = resolvingUnit(promise) { PushUser.pushSubscription.optOut() }
 
   /**
-   * Backend-truth opted-in state, unlike the local `optedIn` in [getPushSubscription].
-   * Callback-based for the same reason as [getTags], and short-circuits to the local
-   * value when the device has no subscriptionId yet.
+   * Opted-in state from the backend (unlike the local value in [getPushSubscription]).
+   * Falls back to the local value before the device has a subscriptionId.
    */
   fun getOptedIn(promise: Promise) {
     try {
@@ -605,11 +551,7 @@ class AppsonairReactNativeApppushModuleImpl(
 
   // MARK: - Background sync
 
-  /**
-   * Parity H1: the Android Push SDK has no AppsOnAirBackgroundSync -- the type
-   * exists on iOS only. Resolving as a no-op keeps cross-platform calling code
-   * working; it is documented as iOS-only in the README rather than faked here.
-   */
+  /** iOS only: resolves as a no-op so cross-platform code keeps working. */
   fun scheduleBackgroundSync(options: ReadableMap?, promise: Promise) {
     Log.i(NAME, "scheduleBackgroundSync() is iOS-only; ignored on Android.")
     promise.resolve(null)
@@ -636,10 +578,7 @@ class AppsonairReactNativeApppushModuleImpl(
 
   // MARK: - Promise helpers
   //
-  // Parity I1/I2: the SDK throws IllegalStateException before initialize() and
-  // IllegalArgumentException on empty input. Every native call goes through one
-  // of these so such a throw becomes a rejected promise instead of a crash. The
-  // JS layer guards too; this is the backstop for a race the JS guard cannot see.
+  // Turn SDK exceptions (e.g. not initialized, empty input) into rejected promises instead of crashes.
 
   private inline fun resolving(promise: Promise, block: () -> Any?) {
     try {
@@ -680,13 +619,8 @@ class AppsonairReactNativeApppushModuleImpl(
     (0 until size()).mapNotNull { getString(it) }
 
   /**
-   * Parity C1: the cross-platform notification shape.
-   *
-   * The native Android model carries 6 fields against iOS's 14. The parity audit's
-   * recommendation is that Android parse the remaining keys out of the FCM data
-   * payload, which is what the block below does -- so a notification looks the
-   * same to JS on both platforms, with nulls only where the payload genuinely
-   * lacked the key.
+   * Builds the same notification shape as iOS. The Android model has fewer fields,
+   * so the rest are read from the FCM data payload.
    */
   private fun PushNotification.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString("id", id)
@@ -708,8 +642,7 @@ class AppsonairReactNativeApppushModuleImpl(
     val badgeIncrement = data["badge_increment"]?.toIntOrNull()
     if (badgeIncrement != null) putInt("badgeIncrement", badgeIncrement) else putNull("badgeIncrement")
 
-    // Parity C1: iOS emits attachments; Android's payload has at most an image,
-    // so synthesize the single-entry array iOS would have produced.
+    // Android has at most one image; wrap it as a one-item attachments array like iOS.
     putArray("attachments", Arguments.createArray().apply {
       imageUrl?.let {
         pushMap(Arguments.createMap().apply {
@@ -725,8 +658,7 @@ class AppsonairReactNativeApppushModuleImpl(
       data.forEach { (k, v) -> putString(k, v) }
     })
 
-    // Android's raw payload is the same flat string map, unlike the nested APNs
-    // userInfo on iOS. Both are the untouched payload, which is what the field promises.
+    // On Android the raw payload is the same flat string map as `data`.
     putMap("rawPayload", Arguments.createMap().apply {
       data.forEach { (k, v) -> putString(k, v) }
     })
@@ -745,7 +677,7 @@ class AppsonairReactNativeApppushModuleImpl(
     }
   }
 
-  /** Parity C5: one casing and one membership set across both platforms. */
+  /** Error codes shared with iOS. */
   private fun PushError.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString(
       "code",
@@ -759,6 +691,6 @@ class AppsonairReactNativeApppushModuleImpl(
       }
     )
     putString("message", message)
-    // `cause` is deliberately dropped -- a Throwable does not cross the bridge.
+    // `cause` is dropped: a Throwable can't cross the bridge.
   }
 }

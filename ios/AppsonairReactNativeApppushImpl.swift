@@ -6,49 +6,34 @@ import React
 #endif
 
 /**
- Swift half of the iOS bridge.
+ Swift half of the iOS bridge; the ObjC++ module forwards every call here. The
+ split exists because the SDK is Swift-only and the Codegen spec is ObjC-only.
 
- The ObjC++ class in AppsonairReactNativeApppush.mm owns one of these and forwards
- every call to it. The split exists because the two halves can only do one job
- each: the native `AppPushService` API is Swift-only (its static members are not
- `@objc`, so ObjC cannot reach them), while the Codegen-generated
- `NativeAppsonairApppushSpec` protocol is ObjC-only and cannot be adopted from Swift.
-
- Threading: `AppPushService` is `@MainActor`-isolated in its entirety (parity A4),
- and React Native calls native modules off the main queue. Every method here
- therefore hops via `Task { @MainActor in ... }` before touching the SDK, and
- resolves its promise from inside that hop.
+ The SDK is main-actor only and React Native calls modules off the main queue,
+ so every method hops to the main actor before touching it.
  */
 @objc(AppsonairReactNativeApppushImpl)
 public class AppsonairReactNativeApppushImpl: NSObject {
 
-  /// One instance per process, not per module. The SDK is initialised at app
-  /// launch -- before any module exists -- and its listeners are registered on
-  /// this instance then, so every module instance (including the one created
-  /// after a JS reload) has to share it.
+  /// Shared by every module instance (including after a JS reload), because the
+  /// SDK listeners are registered on it at app launch.
   @objc public static let shared = AppsonairReactNativeApppushImpl()
 
-  /// Set by the ObjC++ class to `sendEventWithName:body:` via `attach(_:sink:)`.
-  /// Nil until a module exists, which is why every emit site checks it.
+  /// Sends an event to JS. Nil until a module attaches.
   private var eventSink: ((String, [String: Any]) -> Void)?
 
-  /// The module instance currently bridged to JS. A reloaded bridge's old module
-  /// can report stopObserving after the new one started, so updates from any
-  /// other owner are ignored.
+  /// The current module. Calls from an old module after a reload are ignored.
   private weak var owner: AnyObject?
   private var jsInitialized = false
   private var jsListening = false
 
-  /// Taps that arrived before JS could receive them -- in practice the tap that
-  /// cold-launched the app, which iOS delivers long before the JS bundle runs.
-  /// Replayed once JS has called initialize() and subscribed, matching the
-  /// Android bridge's launch-Intent replay (parity A3).
+  /// Taps received before JS was ready (e.g. the tap that launched the app).
+  /// Sent once JS has called initialize() and subscribed, like Android does.
   private var pendingOpened: [[String: Any]] = []
 
   private var sdkInitialized = false
 
-  // Event names. Duplicated in src/index.tsx and the Android bridge -- a rename
-  // has to land in all three at once.
+  // Also defined in src/index.tsx and the Android bridge; keep all three in sync.
   private enum Event {
     static let tokenUpdated = "AppsonairPush:onTokenUpdated"
     static let notificationReceived = "AppsonairPush:onNotificationReceived"
@@ -69,8 +54,7 @@ public class AppsonairReactNativeApppushImpl: NSObject {
 
   // MARK: - Module attachment
 
-  /// Called by each new module instance. Resets the JS-side state, since a new
-  /// module means a new JS context that has not initialised or subscribed yet.
+  /// Called by each new module instance (a fresh JS context), so JS state resets.
   @objc public func attach(_ owner: AnyObject, sink: @escaping (String, [String: Any]) -> Void) {
     DispatchQueue.main.async {
       self.owner = owner
@@ -99,25 +83,16 @@ public class AppsonairReactNativeApppushImpl: NSObject {
   // MARK: - Launch
 
   /**
-   Initialises the SDK while the app is still launching. Called by the ObjC++
-   class on UIApplicationDidFinishLaunchingNotification, i.e. straight after the
-   host's didFinishLaunchingWithOptions: returns.
-
-   It cannot wait for JS: when a notification tap cold-launches the app, iOS
-   hands the tap to the UNUserNotificationCenter delegate on the next run-loop
-   turn, and the SDK only installs that delegate inside initialize(). Waiting for
-   the JS bundle loses the tap -- no opened/clicked event reaches the backend and
-   onNotificationOpened never fires.
+   Starts the SDK during app launch. It can't wait for JS: when a tap launches a
+   killed app, iOS delivers it right after launch, and the SDK only receives it
+   once initialize() has run. Otherwise the opened/clicked event is lost.
    */
   @objc public static func initializeAtLaunch() {
     MainActor.assumeIsolated {
-      // Parity H1: iOS needs an explicit registration step that Android has no
-      // equivalent for. BGTaskScheduler throws if it happens after the app has
-      // finished launching, so it cannot wait for JS either.
+      // BGTaskScheduler throws if handlers are registered after launch.
       AppsOnAirBackgroundSync.registerHandlers()
 
-      // AppsOnAir Core exits a Debug build when the app id is missing. Leave that
-      // to the explicit JS initialize(), as before, rather than exiting at launch.
+      // Without an app id, AppsOnAir Core exits Debug builds, so leave it to JS initialize().
       let appId = Bundle.main.object(forInfoDictionaryKey: "AppsonairAppId") as? String
       guard let appId, !appId.isEmpty else { return }
       shared.initializeSDK()
@@ -129,19 +104,12 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     guard !sdkInitialized else { return }
     sdkInitialized = true
 
-    // `swizzle: true` is not configurable on purpose. With it off the host app
-    // must forward APNs callbacks from its own AppDelegate, which a JS-only
-    // integration has no way to do -- so the wrapper always takes the automatic path.
+    // Always swizzle: otherwise the host AppDelegate must forward APNs callbacks.
     AppPushService.initialize(debug: false, swizzle: true)
     registerListeners()
   }
 
-  // MARK: - Promise helpers
-  //
-  // Parity I1/I2: the JS layer guards initialisation and validates arguments, so
-  // these exist for the residual case where the SDK itself refuses a call. iOS
-  // logs and returns rather than throwing, so there is nothing to catch -- the
-  // helpers are only about getting onto the main actor before every SDK touch.
+  // MARK: - Promise helpers (run SDK calls on the main actor)
 
   private func onMain(_ resolve: @escaping RCTPromiseResolveBlock, _ work: @escaping @MainActor () -> Any?) {
     Task { @MainActor in
@@ -166,13 +134,10 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     Task { @MainActor in
       let debug = (config["debug"] as? NSNumber)?.boolValue ?? false
 
-      // Normally already done by initializeAtLaunch(); this covers an app that
-      // had no AppsonairAppId at launch.
+      // Normally already done at launch.
       self.initializeSDK()
 
-      // The SDK was initialised at launch with debug off, and ignores a second
-      // initialize() call, so the flag is applied here -- with the SDK's own
-      // rule of never overriding a level the app already chose.
+      // The SDK started with debug off, so apply it now (without overriding a level already set).
       if debug && AppPushService.Debug.logLevel == .none {
         AppPushService.Debug.setLogLevel(.debug)
       }
@@ -196,9 +161,8 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     AppPushService.User.pushSubscription.addObserver(self)
     AppPushService.User.addObserver(self)
 
-    // Parity F5: silent push is an iOS-only concept. The completion handler must
-    // be called or the OS penalises the app's background budget, so it is invoked
-    // immediately -- JS gets the payload but cannot extend the background window.
+    // iOS only. Completion is called immediately (iOS penalises late calls), so
+    // JS gets the payload but can't do background work.
     AppPushService.onSilentPushReceived = { [weak self] userInfo, completion in
       self?.emit(Event.silentNotification, ["data": Self.flatten(userInfo)])
       completion(.newData)
@@ -237,12 +201,12 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     onMain(resolve) { AppPushService.User.pushSubscription.token }
   }
 
-  /// Parity D4: APNs re-registration is OS-driven, so there is nothing to refresh.
+  /// No-op: iOS manages APNs token refresh.
   @objc public func refreshToken(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     resolve(nil)
   }
 
-  /// Parity B2: a Firebase concept with no APNs equivalent.
+  /// Android only (Firebase).
   @objc public func getInstallationId(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     resolve(nil)
   }
@@ -260,9 +224,7 @@ public class AppsonairReactNativeApppushImpl: NSObject {
   ) {
     Task { @MainActor in
       AppPushService.Notifications.requestPermission(fallbackToSettings: fallbackToSettings)
-      // requestPermission() is fire-and-forget on iOS too; refreshPermission()
-      // awaits the authorization-status read, which settles once the system
-      // prompt has been answered.
+      // requestPermission() doesn't return the result; refreshPermission() waits for the answer.
       let granted = await AppPushService.Notifications.refreshPermission()
       resolve(granted)
     }
@@ -270,8 +232,7 @@ public class AppsonairReactNativeApppushImpl: NSObject {
 
   @objc public func getPermission(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     Task { @MainActor in
-      // Parity E3: `Notifications.permission` is a cache refreshed on launch and
-      // foreground. Refreshing first is what makes this agree with Android's live read.
+      // The SDK caches permission; refresh first to get the current value.
       resolve(await AppPushService.Notifications.refreshPermission())
     }
   }
@@ -318,12 +279,12 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     }
   }
 
-  /// Parity F3: group keys are an Android/FCM concept.
+  /// Android only.
   @objc public func removeNotificationGroup(_ groupKey: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     resolve(nil)
   }
 
-  /// Parity F4: notification channels are an Android 8+ concept.
+  /// Android only.
   @objc public func createNotificationChannel(_ config: NSDictionary, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     resolve(nil)
   }
@@ -437,11 +398,9 @@ public class AppsonairReactNativeApppushImpl: NSObject {
   }
 
   /**
-   `AppPushService.isOptedIn` is the `enabled` flag the SDK reports to
-   /subscriptions: an APNs token exists, the user has not opted out, and the OS
-   currently grants permission. Android answers the same question by reading the
-   value back from the backend, so the two agree in steady state but diverge the
-   moment permission is revoked in Settings -- documented on the JS side.
+   True when there's an APNs token, the user hasn't opted out and permission is
+   granted. Android reads the backend value instead, so right after permission is
+   revoked in Settings the platforms can briefly disagree.
    */
   @objc public func getOptedIn(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     onMain(resolve) { AppPushService.isOptedIn }
@@ -478,10 +437,9 @@ public class AppsonairReactNativeApppushImpl: NSObject {
   // MARK: - Background sync
 
   @objc public func scheduleBackgroundSync(_ options: NSDictionary, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-    // Parity H1: the cross-platform option is minutes; BGTaskScheduler wants a
-    // minimum delay in seconds.
+    // JS passes minutes; BGTaskScheduler wants seconds.
     let minutes = (options["intervalMinutes"] as? NSNumber)?.doubleValue ?? 60
-    // `requireNetwork` is deliberately unread -- BGAppRefreshTask has no such constraint.
+    // `requireNetwork` is ignored: iOS has no such option.
     onMainVoid(resolve) {
       AppsOnAirBackgroundSync.scheduleIfNeeded(minimumDelay: minutes * 60)
     }
@@ -513,13 +471,8 @@ public class AppsonairReactNativeApppushImpl: NSObject {
   // MARK: - Foreground display control
 
   /**
-   Parity F7 / B4: a no-op on iOS, by necessity rather than by choice.
-
-   `AppPushService.handleWillPresent(notification:)` returns its presentation
-   options synchronously, so there is no completion handler to hold open while
-   JS decides. By the time this call arrives the notification has already been
-   presented. The event still fires so JS sees the notification, but
-   `preventDefault()` is honoured on Android only -- see the README.
+   No-op on iOS: the SDK decides presentation synchronously, so the notification
+   is already shown by the time JS answers. `preventDefault()` works on Android only.
    */
   @objc public func completeNotificationWillDisplay(
     _ notificationId: String,
@@ -532,8 +485,7 @@ public class AppsonairReactNativeApppushImpl: NSObject {
 
   // MARK: - Conversions
 
-  /// Parity C1: iOS's nested `[AnyHashable: Any]` is flattened so `data` means the
-  /// same thing as Android's `Map<String, String>`.
+  /// Flattens the payload to `[String: String]` to match Android's `data`.
   private static func flatten(_ userInfo: [AnyHashable: Any]) -> [String: String] {
     var out: [String: String] = [:]
     for (key, value) in userInfo {
@@ -580,7 +532,7 @@ public class AppsonairReactNativeApppushImpl: NSObject {
       },
       "badgeIncrement": notification.badgeIncrement as Any,
       "collapseId": notification.collapseId as Any,
-      // Parity C1: Android-only payload keys, always null here.
+      // Android only.
       "sound": NSNull(),
       "channelId": NSNull(),
       "data": flatten(notification.userInfo),
@@ -590,12 +542,10 @@ public class AppsonairReactNativeApppushImpl: NSObject {
 }
 
 // MARK: - SDK listener conformances
-//
-// Split into extensions so each protocol's methods sit next to the event they emit.
 
 extension AppsonairReactNativeApppushImpl: PushListener {
   public func onAPNsTokenUpdated(token: String, environment: APNsEnvironment) {
-    // Parity B1: one event shape for both platforms. Android sends `environment: null`.
+    // Android sends `environment: null`.
     emit(Event.tokenUpdated, ["token": token, "environment": environment.rawValue])
   }
 
@@ -604,15 +554,11 @@ extension AppsonairReactNativeApppushImpl: PushListener {
   }
 
   public func onNotificationOpened(notification: PushNotification) {
-    // Intentionally empty. The SDK calls this straight after the click listener
-    // (onClick below) for the same tap, so emitting here too delivered every tap
-    // to JS twice -- the second time with actionId nil, which read as a body tap
-    // even for an action button. onClick is the single source of the event.
+    // Intentionally empty: onClick already emits this tap; emitting here too sent it twice.
   }
 
   public func onError(_ error: PushError) {
-    // Parity C5: `apnsRegistrationFailed` and Android's TOKEN_FETCH_FAILED both
-    // surface as the shared `tokenRegistrationFailed`.
+    // Same code as Android's TOKEN_FETCH_FAILED.
     let code: String
     switch error.code {
     case .notInitialized:         code = "notInitialized"
@@ -631,8 +577,7 @@ extension AppsonairReactNativeApppushImpl: NotificationClickListener {
       "actionId": event.result.actionId as Any,
       "url": event.result.url as Any
     ]
-    // Queued, then flushed straight away when JS is ready. The SDK calls
-    // listeners on the main thread, where the pending/JS state is kept.
+    // Held until JS is ready (sent immediately if it already is).
     pendingOpened.append(body)
     flushPendingOpened()
   }
@@ -655,10 +600,7 @@ extension AppsonairReactNativeApppushImpl: NotificationPermissionObserver {
 
 extension AppsonairReactNativeApppushImpl: PushSubscriptionObserver {
   public func onPushSubscriptionDidChange(state: PushSubscriptionChangedState) {
-    // `PushSubscriptionChangedState` carries only `token` and `optedIn` on both
-    // platforms -- the subscription id lives on the SDK singleton, which is
-    // @MainActor-isolated, hence the hop. The Android bridge reads it the same way,
-    // so both platforms report the same `id` on both sides of the change.
+    // The state has no id, so read it from the SDK (main actor only).
     Task { @MainActor in
       let id = AppPushService.subscriptionId
       self.emit(Event.subscriptionChanged, [

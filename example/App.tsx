@@ -1,14 +1,6 @@
 /**
- * AppsOnAir Push — example / architecture test harness.
- *
- * The point of this screen is that nothing on it is architecture-aware. The same
- * calls run against a Codegen TurboModule or the legacy Bridge depending only on
- * how the app was built; the banner at the top reports which one actually loaded,
- * so a run on each build is a real comparison rather than an assumption.
- *
- * Switching architecture:
- *   Android   npm run android:new   /  npm run android:old
- *   iOS       npm run ios:new       /  npm run ios:old
+ * AppsOnAir Push example. The banner shows which architecture loaded.
+ * Switch with `npm run android:new|old` / `npm run ios:new|old`.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -26,15 +18,7 @@ import {
 
 import AppPushService from 'appsonair-react-native-apppush';
 
-// ---------------------------------------------------------------------------
-// Architecture detection
-//
-// These globals are installed by the runtime, not by this library:
-//   __turboModuleProxy    -- the TurboModule registry; absent on the Bridge.
-//   RN$Bridgeless         -- true when the app runs without the legacy bridge.
-//   nativeFabricUIManager -- Fabric renderer (irrelevant to a native module,
-//                            shown because "New Architecture" usually means both).
-// ---------------------------------------------------------------------------
+// Architecture detection via React Native runtime globals.
 
 const g = globalThis as Record<string, unknown>;
 const hasTurboModules = g.__turboModuleProxy != null;
@@ -51,8 +35,7 @@ export default function App() {
   const [initialized, setInitialized] = useState(false);
   const nextId = useRef(0);
 
-  // QA inputs. Prefilled so every button works with a tap, editable to verify
-  // real values against the dashboard.
+  // Prefilled QA inputs; edit them to test real values.
   const [externalId, setExternalId] = useState('user-42');
   const [tagKey, setTagKey] = useState('plan');
   const [tagValue, setTagValue] = useState('pro');
@@ -83,9 +66,7 @@ export default function App() {
     [append]
   );
 
-  // Subscribe once to every event the wrapper exposes. The native bridges also
-  // emit onTokenUpdated / onSilentNotification / onInstallationIdUpdated /
-  // onError, but those have no JS subscriber any more, so they never arrive.
+  // Subscribe to the events shown in the log.
   useEffect(() => {
     initialize()
     const subs = [
@@ -96,9 +77,7 @@ export default function App() {
         append('event', `onNotificationOpened action=${e.actionId ?? 'body'} url=${e.url ?? 'none'}`)
       ),
       AppPushService.onNotificationWillDisplay((e) => {
-        // preventDefault() is honoured on Android only — iOS decides presentation
-        // synchronously and cannot wait for this handler. Left un-called so the
-        // notification displays; flip it to verify suppression on Android.
+        // Call e.preventDefault() here to test suppression (Android only).
         append('event', `onNotificationWillDisplay "${e.notification.title ?? ''}"`);
       }),
       AppPushService.onPermissionChanged((e) => append('event', `onPermissionChanged ${e.granted}`)),

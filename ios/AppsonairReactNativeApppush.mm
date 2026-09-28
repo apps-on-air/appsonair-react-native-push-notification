@@ -24,6 +24,30 @@
  * have to match the parameter names in src/NativeAppsonairApppush.ts exactly. A
  * rename on either side silently breaks the New Architecture build.
  */
+/**
+ * Runs at image load, before main(). The SDK has to be initialised while the app
+ * is still launching -- see initializeAtLaunch -- and waiting for JS is too late,
+ * so this is the one piece of the bridge that does not start from a JS call.
+ * UIApplicationDidFinishLaunchingNotification is posted straight after the
+ * host's application:didFinishLaunchingWithOptions: returns, so no AppDelegate
+ * change is needed in the host app.
+ *
+ * A constructor rather than +load, which RCT_EXPORT_MODULE() already defines.
+ */
+__attribute__((constructor)) static void AppsonairPushObserveLaunch(void)
+{
+  static id observer;
+  observer = [[NSNotificationCenter defaultCenter]
+      addObserverForName:UIApplicationDidFinishLaunchingNotification
+                  object:nil
+                   queue:nil
+              usingBlock:^(NSNotification *note) {
+                [AppsonairReactNativeApppushImpl initializeAtLaunch];
+                [[NSNotificationCenter defaultCenter] removeObserver:observer];
+                observer = nil;
+              }];
+}
+
 @implementation AppsonairReactNativeApppush {
   AppsonairReactNativeApppushImpl *_impl;
   BOOL _hasListeners;
@@ -34,19 +58,20 @@ RCT_EXPORT_MODULE()
 - (instancetype)init
 {
   if (self = [super init]) {
-    _impl = [AppsonairReactNativeApppushImpl new];
+    _impl = [AppsonairReactNativeApppushImpl shared];
 
     // Events raised before JS subscribes would trip RCTEventEmitter's
     // "sending event with no listeners" warning, so they are dropped here rather
     // than queued -- a token or permission change that arrives before the first
-    // listener is re-readable through the corresponding getter.
+    // listener is re-readable through the corresponding getter. The one
+    // exception, a notification tap, is held by the impl until JS is ready.
     __weak __typeof(self) weakSelf = self;
-    _impl.eventSink = ^(NSString *name, NSDictionary *body) {
+    [_impl attach:self sink:^(NSString *name, NSDictionary *body) {
       __strong __typeof(weakSelf) strongSelf = weakSelf;
       if (strongSelf && strongSelf->_hasListeners) {
         [strongSelf sendEventWithName:name body:body];
       }
-    };
+    }];
   }
   return self;
 }
@@ -80,11 +105,13 @@ RCT_EXPORT_MODULE()
 - (void)startObserving
 {
   _hasListeners = YES;
+  [_impl setListening:YES owner:self];
 }
 
 - (void)stopObserving
 {
   _hasListeners = NO;
+  [_impl setListening:NO owner:self];
 }
 
 #pragma mark - Lifecycle

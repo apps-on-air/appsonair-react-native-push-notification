@@ -135,8 +135,9 @@ function requireNonEmpty(value: string, label: string): void {
 /**
  * Starts the SDK. Await this once, before any other call.
  *
- * On Android the wrapper supplies the `Context` itself; on iOS it resolves the
- * App Group and enables AppDelegate swizzling. Neither detail is exposed here.
+ * On Android the wrapper supplies the `Context` itself. On iOS the native SDK
+ * was already started at app launch (so a tap that launched the app is not
+ * lost); this applies `debug` and releases that tap to `onNotificationOpened`.
  */
 export async function initialize(config: PushConfig = {}): Promise<void> {
   await NativePush.initialize({ debug: config.debug ?? false });

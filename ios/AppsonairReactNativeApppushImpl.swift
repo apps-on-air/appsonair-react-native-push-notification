@@ -22,9 +22,30 @@ import React
 @objc(AppsonairReactNativeApppushImpl)
 public class AppsonairReactNativeApppushImpl: NSObject {
 
-  /// Set by the ObjC++ class to `sendEventWithName:body:`. Nil until the module
-  /// has JS listeners, which is why every emit site checks it.
-  @objc public var eventSink: ((String, [String: Any]) -> Void)?
+  /// One instance per process, not per module. The SDK is initialised at app
+  /// launch -- before any module exists -- and its listeners are registered on
+  /// this instance then, so every module instance (including the one created
+  /// after a JS reload) has to share it.
+  @objc public static let shared = AppsonairReactNativeApppushImpl()
+
+  /// Set by the ObjC++ class to `sendEventWithName:body:` via `attach(_:sink:)`.
+  /// Nil until a module exists, which is why every emit site checks it.
+  private var eventSink: ((String, [String: Any]) -> Void)?
+
+  /// The module instance currently bridged to JS. A reloaded bridge's old module
+  /// can report stopObserving after the new one started, so updates from any
+  /// other owner are ignored.
+  private weak var owner: AnyObject?
+  private var jsInitialized = false
+  private var jsListening = false
+
+  /// Taps that arrived before JS could receive them -- in practice the tap that
+  /// cold-launched the app, which iOS delivers long before the JS bundle runs.
+  /// Replayed once JS has called initialize() and subscribed, matching the
+  /// Android bridge's launch-Intent replay (parity A3).
+  private var pendingOpened: [[String: Any]] = []
+
+  private var sdkInitialized = false
 
   // Event names. Duplicated in src/index.tsx and the Android bridge -- a rename
   // has to land in all three at once.
@@ -44,6 +65,75 @@ public class AppsonairReactNativeApppushImpl: NSObject {
 
   private func emit(_ name: String, _ body: [String: Any]) {
     eventSink?(name, body)
+  }
+
+  // MARK: - Module attachment
+
+  /// Called by each new module instance. Resets the JS-side state, since a new
+  /// module means a new JS context that has not initialised or subscribed yet.
+  @objc public func attach(_ owner: AnyObject, sink: @escaping (String, [String: Any]) -> Void) {
+    DispatchQueue.main.async {
+      self.owner = owner
+      self.eventSink = sink
+      self.jsInitialized = false
+      self.jsListening = false
+    }
+  }
+
+  /// Mirrors RCTEventEmitter's start/stopObserving for `owner`.
+  @objc public func setListening(_ listening: Bool, owner: AnyObject) {
+    DispatchQueue.main.async {
+      guard self.owner === owner else { return }
+      self.jsListening = listening
+      self.flushPendingOpened()
+    }
+  }
+
+  private func flushPendingOpened() {
+    guard jsInitialized, jsListening, !pendingOpened.isEmpty else { return }
+    let events = pendingOpened
+    pendingOpened.removeAll()
+    events.forEach { emit(Event.notificationOpened, $0) }
+  }
+
+  // MARK: - Launch
+
+  /**
+   Initialises the SDK while the app is still launching. Called by the ObjC++
+   class on UIApplicationDidFinishLaunchingNotification, i.e. straight after the
+   host's didFinishLaunchingWithOptions: returns.
+
+   It cannot wait for JS: when a notification tap cold-launches the app, iOS
+   hands the tap to the UNUserNotificationCenter delegate on the next run-loop
+   turn, and the SDK only installs that delegate inside initialize(). Waiting for
+   the JS bundle loses the tap -- no opened/clicked event reaches the backend and
+   onNotificationOpened never fires.
+   */
+  @objc public static func initializeAtLaunch() {
+    MainActor.assumeIsolated {
+      // Parity H1: iOS needs an explicit registration step that Android has no
+      // equivalent for. BGTaskScheduler throws if it happens after the app has
+      // finished launching, so it cannot wait for JS either.
+      AppsOnAirBackgroundSync.registerHandlers()
+
+      // AppsOnAir Core exits a Debug build when the app id is missing. Leave that
+      // to the explicit JS initialize(), as before, rather than exiting at launch.
+      let appId = Bundle.main.object(forInfoDictionaryKey: "AppsonairAppId") as? String
+      guard let appId, !appId.isEmpty else { return }
+      shared.initializeSDK()
+    }
+  }
+
+  @MainActor
+  private func initializeSDK() {
+    guard !sdkInitialized else { return }
+    sdkInitialized = true
+
+    // `swizzle: true` is not configurable on purpose. With it off the host app
+    // must forward APNs callbacks from its own AppDelegate, which a JS-only
+    // integration has no way to do -- so the wrapper always takes the automatic path.
+    AppPushService.initialize(debug: false, swizzle: true)
+    registerListeners()
   }
 
   // MARK: - Promise helpers
@@ -76,17 +166,19 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     Task { @MainActor in
       let debug = (config["debug"] as? NSNumber)?.boolValue ?? false
 
-      // `swizzle: true` is not configurable on purpose. With it off the host app
-      // must forward APNs callbacks from its own AppDelegate, which a JS-only
-      // integration has no way to do -- so the wrapper always takes the automatic path.
-      AppPushService.initialize(debug: debug, swizzle: true)
+      // Normally already done by initializeAtLaunch(); this covers an app that
+      // had no AppsonairAppId at launch.
+      self.initializeSDK()
 
-      self.registerListeners()
+      // The SDK was initialised at launch with debug off, and ignores a second
+      // initialize() call, so the flag is applied here -- with the SDK's own
+      // rule of never overriding a level the app already chose.
+      if debug && AppPushService.Debug.logLevel == .none {
+        AppPushService.Debug.setLogLevel(.debug)
+      }
 
-      // Parity H1: iOS needs an explicit registration step that Android has no
-      // equivalent for, and BGTaskScheduler requires it before the app finishes
-      // launching. Doing it here keeps scheduleBackgroundSync() symmetrical.
-      AppsOnAirBackgroundSync.registerHandlers()
+      self.jsInitialized = true
+      self.flushPendingOpened()
 
       resolve(nil)
     }
@@ -534,11 +626,15 @@ extension AppsonairReactNativeApppushImpl: PushListener {
 
 extension AppsonairReactNativeApppushImpl: NotificationClickListener {
   public func onClick(event: NotificationClickEvent) {
-    emit(Event.notificationOpened, [
+    let body: [String: Any] = [
       "notification": Self.serialize(event.notification),
       "actionId": event.result.actionId as Any,
       "url": event.result.url as Any
-    ])
+    ]
+    // Queued, then flushed straight away when JS is ready. The SDK calls
+    // listeners on the main thread, where the pending/JS state is kept.
+    pendingOpened.append(body)
+    flushPendingOpened()
   }
 }
 

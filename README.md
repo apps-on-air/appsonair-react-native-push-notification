@@ -159,6 +159,11 @@ Set both pairs to the same values so every notification looks the same.
 Call `initialize()` once, as early as possible. Every other method rejects with
 `notInitialized` until it resolves.
 
+On iOS the native SDK already starts at app launch, so no `AppDelegate` code is
+needed. That's what lets it record a tap that opens a killed app. The tap is held
+and delivered to `onNotificationOpened` once `initialize()` resolves, the same as
+on Android.
+
 ```ts
 import AppPushService from 'appsonair-react-native-apppush';
 

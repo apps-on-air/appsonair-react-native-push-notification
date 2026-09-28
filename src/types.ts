@@ -1,11 +1,4 @@
-/**
- * Cross-platform types for the AppsOnAir Push SDK.
- *
- * Where the two native SDKs disagree, this file defines the single shape the
- * wrapper exposes and the native bridges normalise to. Every such decision
- * traces to a row in `appsonair-push-notification-android/CROSS_PLATFORM_PARITY.md`;
- * the row id is cited so the reason survives.
- */
+/** Cross-platform types. Where iOS and Android differ, both bridges convert to these shapes. */
 
 // MARK: - Configuration
 
@@ -15,14 +8,8 @@ export interface PushConfig {
 }
 
 /**
- * There is deliberately no `appGroupId` option.
- *
- * The parity audit's A1 row proposes one, but the native iOS initializer is
- * `initialize(debug:swizzle:)` — it takes no App Group argument. iOS resolves the
- * group itself, from an `AppsOnAirAppGroup` string in the app's Info.plist, else
- * the convention `group.<bundle-id>.appsonair`. Accepting the value here would be
- * a knob that silently does nothing, so it is configured where it is actually
- * read. See the README's iOS setup section.
+ * No `appGroupId` option: iOS reads it from `AppsOnAirAppGroup` in Info.plist,
+ * defaulting to `group.<bundle-id>.appsonair`.
  */
 
 // MARK: - Notification payload
@@ -40,11 +27,8 @@ export interface NotificationAttachment {
 }
 
 /**
- * A received or tapped notification.
- *
- * Parity C1: iOS emits 14 fields, Android 6. This is the union — fields the
- * running platform cannot source resolve to `null` (or `[]`), never `undefined`.
- * The per-field platform notes below are the authoritative support matrix.
+ * A received or tapped notification. Fields a platform doesn't support are
+ * `null` (or `[]`), never `undefined`.
  */
 export interface PushNotification {
   /** Payload `notification_id`. */
@@ -63,7 +47,7 @@ export interface PushNotification {
 
   /** Payload `url` — deep link opened on tap. */
   launchUrl: string | null;
-  /** Payload `image_url`. On iOS this loses to `attachments` when both are present. */
+  /** Payload `image_url`. */
   imageUrl: string | null;
   /** Payload `attachments`. **iOS only** — always `[]` on Android. */
   attachments: NotificationAttachment[];
@@ -78,20 +62,10 @@ export interface PushNotification {
   /** Notification channel id. **Android only** — `null` on iOS. */
   channelId: string | null;
 
-  /**
-   * Flattened string map of the payload's custom keys.
-   *
-   * Parity C1: Android's native `data` map is already `Map<String, String>`;
-   * the iOS bridge flattens `userInfo` to match, so this field has the same
-   * meaning on both platforms.
-   */
+  /** The payload's custom keys as a flat string map (same on both platforms). */
   data: Record<string, string>;
 
-  /**
-   * The complete unmodified payload. Shapes differ per platform (APNs `userInfo`
-   * vs the FCM data bundle) — reach for `data` first, and use this only for keys
-   * that survive neither flattening nor the typed fields above.
-   */
+  /** The complete payload. Prefer `data`; use this only for keys missing there. */
   rawPayload: Record<string, unknown>;
 }
 
@@ -100,10 +74,7 @@ export interface PushNotification {
 export interface TokenUpdatedEvent {
   /** APNs hex token on iOS, FCM registration token on Android. */
   token: string;
-  /**
-   * Parity B1/C8: which APNs endpoint the backend must use.
-   * **iOS only** — always `null` on Android, where FCM routes for you.
-   */
+  /** Which APNs environment the token belongs to. **iOS only** — `null` on Android. */
   environment: 'sandbox' | 'production' | null;
 }
 
@@ -119,24 +90,12 @@ export interface NotificationReceivedEvent {
   notification: PushNotification;
 }
 
-/**
- * Fired while the app is in the foreground, before the notification is displayed.
- *
- * Parity B4/F7: `preventDefault()` is exposed, presentation options are not —
- * iOS lets the OS present, Android builds the notification itself, so any
- * option set would mean different things on each platform.
- */
+/** Fired while the app is in the foreground, before the notification is displayed. */
 export interface NotificationWillDisplayEvent {
   notification: PushNotification;
   /**
-   * Suppress the system notification. Must be called synchronously in the handler.
-   *
-   * **Honoured on Android only.** The Android SDK calls its foreground listeners
-   * on FCM's background thread, so the bridge can park there while JS decides.
-   * iOS's `handleWillPresent(notification:)` returns its presentation options
-   * synchronously with no completion handler to hold open, so by the time a JS
-   * handler runs the notification has already been presented. On iOS this event
-   * is informational and calling `preventDefault()` does nothing.
+   * Suppress the system notification. Call it synchronously in the handler.
+   * **Android only** — on iOS the notification is already shown when JS runs.
    */
   preventDefault: () => void;
 }
@@ -168,34 +127,22 @@ export interface UserStateChangedEvent {
 }
 
 /**
- * A data-only push that is delivered without being displayed.
- *
- * Parity F5 — supported on both platforms, but the two are triggered
- * differently and your backend has to send for both:
- *
- * - **iOS** uses the APNs transport flag, `content-available: 1`.
- * - **Android** has no transport-level equivalent in FCM, so the SDK keys off a
- *   `silent: "true"` entry in the data payload. A data push *without* that key
- *   renders as a visible notification and fires no listener here.
- *
- * On iOS the OS completion handler is invoked as soon as the event is emitted,
- * so a handler cannot extend the background execution window.
+ * A data-only push delivered without being displayed.
+ * - **iOS:** sent with `content-available: 1`. The handler can't do background work.
+ * - **Android:** needs `silent: "true"` in the data payload, otherwise it's shown.
  */
 export interface SilentNotificationEvent {
   data: Record<string, string>;
 }
 
-/** Firebase Installation ID. Parity B2: **Android only.** */
+/** Firebase Installation ID. **Android only.** */
 export interface InstallationIdEvent {
   id: string;
 }
 
 /**
- * Parity C5: the union of both platforms' error codes in one casing.
- * `tokenRegistrationFailed` is the shared name for iOS `apnsRegistrationFailed`
- * and Android `TOKEN_FETCH_FAILED`.
- *
- * Native `PushError.cause` is dropped — a `Throwable` does not cross the bridge.
+ * Error codes from both platforms. `tokenRegistrationFailed` covers iOS
+ * `apnsRegistrationFailed` and Android `TOKEN_FETCH_FAILED`.
  */
 export type PushErrorCode =
   | 'notInitialized'
@@ -213,7 +160,6 @@ export interface PushErrorEvent {
 
 // MARK: - Enums
 
-/** Parity C6: one casing for both platforms; the bridge maps to the native enum. */
 export type LogLevel =
   | 'none'
   | 'fatal'
@@ -224,9 +170,8 @@ export type LogLevel =
   | 'verbose';
 
 /**
- * Parity C7: iOS reports all five states. Android has no granular type and
- * reports only `authorized` or `denied` — it can never return `notDetermined`,
- * so do not branch on that value for a cross-platform pre-prompt.
+ * iOS reports all five states. Android reports only `authorized` or `denied`
+ * (never `notDetermined`).
  */
 export type PermissionStatus =
   | 'notDetermined'
@@ -254,7 +199,7 @@ export type NotificationChannelImportance =
   | 'high'
   | 'max';
 
-/** Parity F4: **Android only.** A no-op on iOS, which has no channel concept. */
+/** **Android only.** No-op on iOS. */
 export interface NotificationChannelConfig {
   id: string;
   name: string;
@@ -266,15 +211,11 @@ export interface NotificationChannelConfig {
 
 // MARK: - Background sync
 
-/**
- * Parity H1: the two native APIs share no method name, parameter, or unit —
- * iOS takes seconds via BGTaskScheduler, Android minutes via WorkManager. This
- * is the single shape; each bridge converts.
- */
+/** **iOS only** (BGTaskScheduler). No-op on Android. */
 export interface BackgroundSyncOptions {
-  /** Defaults to 60. iOS converts to seconds and treats it as a *minimum* delay. */
+  /** Minimum delay between runs. Defaults to 60. */
   intervalMinutes?: number;
-  /** Android WorkManager constraint. Ignored on iOS. Defaults to `true`. */
+  /** Currently ignored (iOS has no such option). */
   requireNetwork?: boolean;
 }
 

@@ -1,14 +1,6 @@
 /**
- * AppsOnAir Push — example / architecture test harness.
- *
- * The point of this screen is that nothing on it is architecture-aware. The same
- * calls run against a Codegen TurboModule or the legacy Bridge depending only on
- * how the app was built; the banner at the top reports which one actually loaded,
- * so a run on each build is a real comparison rather than an assumption.
- *
- * Switching architecture:
- *   Android   npm run android:new   /  npm run android:old
- *   iOS       npm run ios:new       /  npm run ios:old
+ * AppsOnAir Push example. The banner shows which architecture loaded.
+ * Switch with `npm run android:new|old` / `npm run ios:new|old`.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -18,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -25,15 +18,7 @@ import {
 
 import AppPushService from 'appsonair-react-native-apppush';
 
-// ---------------------------------------------------------------------------
-// Architecture detection
-//
-// These globals are installed by the runtime, not by this library:
-//   __turboModuleProxy    -- the TurboModule registry; absent on the Bridge.
-//   RN$Bridgeless         -- true when the app runs without the legacy bridge.
-//   nativeFabricUIManager -- Fabric renderer (irrelevant to a native module,
-//                            shown because "New Architecture" usually means both).
-// ---------------------------------------------------------------------------
+// Architecture detection via React Native runtime globals.
 
 const g = globalThis as Record<string, unknown>;
 const hasTurboModules = g.__turboModuleProxy != null;
@@ -49,6 +34,18 @@ export default function App() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [initialized, setInitialized] = useState(false);
   const nextId = useRef(0);
+
+  // Prefilled QA inputs; edit them to test real values.
+  const [externalId, setExternalId] = useState('user-42');
+  const [tagKey, setTagKey] = useState('plan');
+  const [tagValue, setTagValue] = useState('pro');
+  const [aliasLabel, setAliasLabel] = useState('crm');
+  const [aliasId, setAliasId] = useState('c-1');
+  const [email, setEmail] = useState('qa@example.com');
+  const [language, setLanguage] = useState('en');
+  const [badgeCount, setBadgeCount] = useState('5');
+  const [notificationId, setNotificationId] = useState('demo-1');
+  const [groupKey, setGroupKey] = useState('demo-group');
 
   const append = useCallback((kind: LogEntry['kind'], text: string) => {
     setLog((prev) => [{ id: nextId.current++, kind, text }, ...prev].slice(0, 60));
@@ -69,9 +66,7 @@ export default function App() {
     [append]
   );
 
-  // Subscribe once to every event the wrapper exposes. The native bridges also
-  // emit onTokenUpdated / onSilentNotification / onInstallationIdUpdated /
-  // onError, but those have no JS subscriber any more, so they never arrive.
+  // Subscribe to the events shown in the log.
   useEffect(() => {
     initialize()
     const subs = [
@@ -82,9 +77,7 @@ export default function App() {
         append('event', `onNotificationOpened action=${e.actionId ?? 'body'} url=${e.url ?? 'none'}`)
       ),
       AppPushService.onNotificationWillDisplay((e) => {
-        // preventDefault() is honoured on Android only — iOS decides presentation
-        // synchronously and cannot wait for this handler. Left un-called so the
-        // notification displays; flip it to verify suppression on Android.
+        // Call e.preventDefault() here to test suppression (Android only).
         append('event', `onNotificationWillDisplay "${e.notification.title ?? ''}"`);
       }),
       AppPushService.onPermissionChanged((e) => append('event', `onPermissionChanged ${e.granted}`)),
@@ -111,7 +104,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={[styles.flex, theme.screen]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Banner theme={theme} initialized={initialized} />
 
         <Section title="Lifecycle" theme={theme}>
@@ -127,7 +120,8 @@ export default function App() {
           <Btn label="getDeviceId" onPress={run('getDeviceId', async () => await AppPushService.getDeviceId())} theme={theme} />
           <Btn label="getSubscriptionId" onPress={run('getSubscriptionId', async () => await AppPushService.getSubscriptionId())} theme={theme} />
           <Btn label="getExternalId" onPress={run('getExternalId', async () => await AppPushService.getExternalId())} theme={theme} />
-          <Btn label="login('user-42')" onPress={run('login', async () => await AppPushService.login('user-42'))} theme={theme} />
+          <Field label="External id" value={externalId} onChangeText={setExternalId} theme={theme} />
+          <Btn label="login" onPress={run(`login(${externalId})`, async () => await AppPushService.login(externalId))} theme={theme} primary />
           <Btn label="logout" onPress={run('logout', async () => await AppPushService.logout())} theme={theme} />
           <Btn
             label="login('') → should reject"
@@ -157,40 +151,66 @@ export default function App() {
 
         <Section title="Notifications" theme={theme}>
           <Btn label="clearAll" onPress={run('notifications.clearAll', async () => await AppPushService.notifications.clearAll())} theme={theme} />
+          <Field label="Notification id(s), comma-separated" value={notificationId} onChangeText={setNotificationId} theme={theme} />
           <Btn
-            label="remove('demo-1')"
-            onPress={run('notifications.remove', async () => await AppPushService.notifications.remove('demo-1'))}
+            label="remove"
+            onPress={run(`notifications.remove(${notificationId})`, async () => await AppPushService.notifications.remove(notificationId))}
             theme={theme}
           />
           <Btn
             label="removeMany"
-            onPress={run('notifications.removeMany', async () => await AppPushService.notifications.removeMany(['demo-1', 'demo-2']))}
+            onPress={run(`notifications.removeMany(${notificationId})`, async () =>
+              await AppPushService.notifications.removeMany(splitList(notificationId))
+            )}
             theme={theme}
           />
+          <Field label="Group key" value={groupKey} onChangeText={setGroupKey} theme={theme} />
           <Btn
             label="removeGroup (Android)"
-            onPress={run('notifications.removeGroup', async () => await AppPushService.notifications.removeGroup('demo-group'))}
+            onPress={run(`notifications.removeGroup(${groupKey})`, async () => await AppPushService.notifications.removeGroup(groupKey))}
             theme={theme}
           />
         </Section>
 
         <Section title="Badge" theme={theme}>
           <Btn label="get" onPress={run('badge.get', async () => await AppPushService.badge.get())} theme={theme} />
-          <Btn label="set(5)" onPress={run('badge.set(5)', async () => await AppPushService.badge.set(5))} theme={theme} />
+          <Field label="Badge count" value={badgeCount} onChangeText={setBadgeCount} keyboardType="number-pad" theme={theme} />
+          <Btn label="set" onPress={run(`badge.set(${badgeCount})`, async () => await AppPushService.badge.set(Number(badgeCount)))} theme={theme} />
           <Btn label="increment()" onPress={run('badge.increment', async () => await AppPushService.badge.increment())} theme={theme} />
           <Btn label="clear" onPress={run('badge.clear', async () => await AppPushService.badge.clear())} theme={theme} />
         </Section>
 
         <Section title="User" theme={theme}>
-          <Btn label="addTag(plan, pro)" onPress={run('user.addTag', async () => await AppPushService.user.addTag('plan', 'pro'))} theme={theme} />
-          <Btn label="getTags" onPress={run('user.getTags', async () => await AppPushService.user.getTags())} theme={theme} />
-          <Btn label="removeTag(plan)" onPress={run('user.removeTag', async () => await AppPushService.user.removeTag('plan'))} theme={theme} />
-          <Btn label="addAlias(crm, c-1)" onPress={run('user.addAlias', async () => await AppPushService.user.addAlias('crm', 'c-1'))} theme={theme} />
-          <Btn label="setLanguage(en)" onPress={run('user.setLanguage', async () => await AppPushService.user.setLanguage('en'))} theme={theme} />
-          <Btn label="getLanguage" onPress={run('user.getLanguage', async () => await AppPushService.user.getLanguage())} theme={theme} />
           <Btn label="getPushSubscription" onPress={run('user.getPushSubscription', async () => await AppPushService.user.getPushSubscription())} theme={theme} />
           <Btn label="optOut" onPress={run('user.optOut', async () => await AppPushService.user.optOut())} theme={theme} />
           <Btn label="optIn" onPress={run('user.optIn', async () => await AppPushService.user.optIn())} theme={theme} />
+        </Section>
+
+        <Section title="Tags" theme={theme}>
+          <Field label="Key" value={tagKey} onChangeText={setTagKey} theme={theme} half />
+          <Field label="Value" value={tagValue} onChangeText={setTagValue} theme={theme} half />
+          <Btn label="addTag" onPress={run(`user.addTag(${tagKey}, ${tagValue})`, async () => await AppPushService.user.addTag(tagKey, tagValue))} theme={theme} primary />
+          <Btn label="removeTag" onPress={run(`user.removeTag(${tagKey})`, async () => await AppPushService.user.removeTag(tagKey))} theme={theme} />
+          <Btn label="getTags" onPress={run('user.getTags', async () => await AppPushService.user.getTags())} theme={theme} />
+        </Section>
+
+        <Section title="Aliases" theme={theme}>
+          <Field label="Label" value={aliasLabel} onChangeText={setAliasLabel} theme={theme} half />
+          <Field label="Id" value={aliasId} onChangeText={setAliasId} theme={theme} half />
+          <Btn label="addAlias" onPress={run(`user.addAlias(${aliasLabel}, ${aliasId})`, async () => await AppPushService.user.addAlias(aliasLabel, aliasId))} theme={theme} primary />
+          <Btn label="removeAlias" onPress={run(`user.removeAlias(${aliasLabel})`, async () => await AppPushService.user.removeAlias(aliasLabel))} theme={theme} />
+        </Section>
+
+        <Section title="Email" theme={theme}>
+          <Field label="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" theme={theme} />
+          <Btn label="addEmail" onPress={run(`user.addEmail(${email})`, async () => await AppPushService.user.addEmail(email))} theme={theme} primary />
+          <Btn label="removeEmail" onPress={run(`user.removeEmail(${email})`, async () => await AppPushService.user.removeEmail(email))} theme={theme} />
+        </Section>
+
+        <Section title="Language" theme={theme}>
+          <Field label="Language code (e.g. en, fr, hi)" value={language} onChangeText={setLanguage} theme={theme} />
+          <Btn label="setLanguage" onPress={run(`user.setLanguage(${language})`, async () => await AppPushService.user.setLanguage(language))} theme={theme} primary />
+          <Btn label="getLanguage" onPress={run('user.getLanguage', async () => await AppPushService.user.getLanguage())} theme={theme} />
         </Section>
 
         <Section title="Misc" theme={theme}>
@@ -285,6 +305,42 @@ function Btn({
   );
 }
 
+function Field({
+  label,
+  value,
+  onChangeText,
+  theme,
+  keyboardType,
+  half,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  theme: Theme;
+  keyboardType?: 'default' | 'email-address' | 'number-pad';
+  half?: boolean;
+}) {
+  return (
+    <View style={half ? styles.fieldHalf : styles.field}>
+      <Text style={theme.muted}>{label}</Text>
+      <TextInput
+        style={[styles.input, theme.input]}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder={label}
+        placeholderTextColor="#a1a1aa"
+      />
+    </View>
+  );
+}
+
+function splitList(value: string): string[] {
+  return value.split(',').map((v) => v.trim()).filter(Boolean);
+}
+
 function format(value: unknown): string {
   if (value === null) return 'null';
   if (value === undefined) return 'ok';
@@ -308,6 +364,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   btn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+  field: { width: '100%', gap: 4 },
+  fieldHalf: { flexGrow: 1, flexBasis: '45%', gap: 4 },
+  input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14 },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   logBox: { padding: 12, borderRadius: 12, gap: 3, minHeight: 120 },
   logLine: { fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
@@ -325,6 +384,7 @@ const light: Theme = {
   event: { color: '#6d28d9', fontSize: 12 },
   btn: { backgroundColor: '#e4e4e7' },
   btnText: { color: '#18181b', fontSize: 13 },
+  input: { backgroundColor: '#ffffff', borderColor: '#d4d4d8', color: '#18181b' },
   btnPrimary: { backgroundColor: '#2563eb' },
   btnPrimaryText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
 };
@@ -341,6 +401,7 @@ const dark: Theme = {
   event: { color: '#c4b5fd', fontSize: 12 },
   btn: { backgroundColor: '#27272a' },
   btnText: { color: '#fafafa', fontSize: 13 },
+  input: { backgroundColor: '#18181b', borderColor: '#3f3f46', color: '#fafafa' },
   btnPrimary: { backgroundColor: '#3b82f6' },
   btnPrimaryText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
 };

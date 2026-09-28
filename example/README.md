@@ -1,144 +1,124 @@
 # AppsOnAir Push — example app
 
-A test harness for `appsonair-react-native-apppush`. Every button calls the public
-API; the banner at the top reports which native path actually loaded, so running
-the same screen on both builds is a real comparison rather than an assumption.
+A runnable React Native app for trying out and testing
+`appsonair-react-native-apppush`. Every button calls one SDK method, input fields
+let you use your own values, and the log at the bottom shows each result and
+event as it happens.
 
-```
-New Architecture              Old Architecture
-TurboModule (Codegen)         Bridge (NativeModule)
-ios · bridgeless true …       ios · bridgeless false …
-```
+## Setup
 
-That banner reads runtime globals (`__turboModuleProxy`, `RN$Bridgeless`,
-`nativeFabricUIManager`), not anything this library sets — it cannot report the
-wrong answer just because the library misbehaved.
+### 1. Install
 
-## Prerequisites
-
-By default this example resolves the **published** native SDKs (`1.0.0-beta`
-on both platforms) — JitPack on Android, the CocoaPods trunk on iOS — so it
-exercises exactly the dependency path a host app gets. Nothing extra to set
-up.
-
-Two things are checked in as **placeholders**, and the app will build but not
-receive anything until you replace them with your own:
-
-| Where | Placeholder | Replace with |
-|---|---|---|
-| `android/app/src/main/AndroidManifest.xml` | `AppsonairAppId` = `your-appsonair-app-id` | your AppsOnAir app id |
-| `ios/AppsOnAirPushExample/Info.plist` | `AppsonairAppId` = `your-appsonair-app-id` | your AppsOnAir app id |
-
-**Android also needs Firebase**, and no credentials ship with this repo. Create a
-Firebase project, register an Android app with package name
-`com.appsonairpushexample`, and drop the downloaded `google-services.json` into
-`android/app/`. It is gitignored, so it stays yours.
-
-Without it the app still builds — `app/build.gradle` applies the Google Services
-plugin only when the file is present, and warns when it isn't — but
-`initialize()` fails at runtime with *Default FirebaseApp is not initialized in
-this process*, because the APK carries no sender id.
-
-iOS uses APNs directly and needs no Firebase file at all. It does need the Push
-Notifications capability on the target and a real `AppsonairAppId` in
-`Info.plist`. Both targets use the `com.appsonairpushexample` bundle id, which
-you will want to change to one your team can sign and enable push on.
-
-**Release builds run R8.** `enableProguardInReleaseBuilds` is on, unlike the
-stock React Native template, so `./gradlew :app:assembleRelease` exercises the
-minified path that a real published app takes. CI builds it on every push — an
-AAR is never minified itself, so this is the only place stripping shows up.
-
-## Install
-
-From the repo root:
+From the **repo root** (not this folder):
 
 ```sh
 npm install
 ```
 
-Use npm or Yarn 3+, not Yarn 1. This package is published, so it cannot be
-`"private": true`, and Yarn 1 refuses workspaces in a non-private project. Yarn 3+
-works and reads `.yarnrc.yml` for the node-modules linker.
+Use npm or Yarn 3+. Yarn 1 is not supported.
 
-## Running
+### 2. Add your AppsOnAir app id
 
-The architecture is a **build-time** choice on both platforms, so switching means
-a rebuild — a Metro reload will not do it.
+Replace the `your-appsonair-app-id` placeholder in both files:
+
+| Platform | File |
+|---|---|
+| Android | `android/app/src/main/AndroidManifest.xml` |
+| iOS | `ios/AppsOnAirPushExample/Info.plist` |
+
+### 3. Android — add Firebase
+
+1. In the Firebase console, add an Android app with package name
+   `com.appsonairpushexample` (or your own — see below).
+2. Download `google-services.json` into `android/app/`. It is gitignored.
+
+Without it the app still builds, but `initialize()` fails with
+*Default FirebaseApp is not initialized*.
+
+### 4. iOS — signing
+
+Open `ios/AppsOnAirPushExample.xcworkspace` in Xcode, select the
+**AppsOnAirPushExample** target, then under *Signing & Capabilities*:
+
+- Pick your team and set a bundle id you can sign.
+- Make sure **Push Notifications** is enabled for it.
+
+Push notifications need a **real device** — the simulator has no APNs token.
+
+> Using your own package name / bundle id? Update `applicationId` in
+> `android/app/build.gradle` too, and register that id in Firebase. Keep these
+> local changes out of commits.
+
+## Run
 
 ```sh
-# Android
-npm run android:new     # newArchEnabled=true  → TurboModule
-npm run android:old     # newArchEnabled=false → Bridge
-
-# iOS
-npm run ios:new         # RCT_NEW_ARCH_ENABLED=1 pod install, then run
-npm run ios:old         # RCT_NEW_ARCH_ENABLED=0 pod install, then run
+cd example
+npm run android
+npm run ios
 ```
 
-`arch:new` / `arch:old` only rewrite `newArchEnabled` in
-`android/gradle.properties`; iOS is switched by the environment variable at
-`pod install` time, which is why it has its own pair of scripts.
-
-**Clean between Android switches.** Gradle caches the generated Codegen sources,
-and switching without a clean is the usual cause of a "cannot find symbol
-`NativeAppsonairApppushSpec`" or a stale module:
+To test a specific React Native architecture:
 
 ```sh
-cd android && ./gradlew clean && cd ..
+npm run android:new    # New Architecture
+npm run android:old    # Old Architecture
+npm run ios:new
+npm run ios:old
 ```
 
-## What to check on each build
+The banner at the top shows which architecture actually loaded. Switching needs
+a rebuild, not a Metro reload. On Android, run `cd android && ./gradlew clean`
+between switches.
 
-1. **Banner** — reports the architecture you intended to build.
-2. **`initialize`** — then the banner's last line flips to *initialized*.
-3. **Guard check before `initialize`** — press *guard check* on a fresh launch.
-   It must **reject** with `notInitialized` on both platforms. This is the parity
-   I1 guard: without it the native Android SDK throws `IllegalStateException` and
-   crashes the app instead of rejecting.
-4. **`login('')`** — must reject with `invalidArgument`, not crash (parity I2).
-5. **`requestPermission`** — grant it, then poll `getToken` until it resolves a
-   token. There is no `onTokenUpdated` event in JS (see the root README's
-   *Native methods deliberately not exported to JS*), so token delivery is
-   pull-only: APNs hex on iOS, FCM token on Android.
-6. **Send a push** and confirm `onNotificationReceived` in the foreground and
-   `onNotificationOpened` on tap. Tapping while the app is backgrounded exercises
-   the Android `onNewIntent` path the wrapper registers for you (parity A3).
-7. **Event log** — the same events, in the same shape, on both architectures.
-   That equivalence is the actual thing under test.
+## Test checklist
 
-The API surface is identical on both builds by construction: one Codegen spec
-generates the New Architecture contract, and the Old Architecture module is
-checked against it in CI-by-eye (see the root README's note on that gap).
+The app calls `initialize()` on launch — the banner shows *SDK initialized*
+when it's ready.
+
+| # | Do | Expect |
+|---|---|---|
+| 1 | **requestPermission** | System prompt; log shows `true` once granted. |
+| 2 | **getToken** | A token (may take a few seconds after permission). |
+| 3 | Enter an id → **login** → **getExternalId** | Returns the id you entered. |
+| 4 | Clear the id → **login** | Rejects with `invalidArgument`, no crash. |
+| 5 | Tags: key + value → **addTag** → **getTags** | Your tag appears. |
+| 6 | Aliases: label + id → **addAlias** | Resolves; alias visible in the dashboard. |
+| 7 | Email → **addEmail** | Resolves; email visible in the dashboard. |
+| 8 | Language → **setLanguage** → **getLanguage** | Returns the code you set. |
+| 9 | Send a push with the app open | `⚡ onNotificationReceived` in the log. |
+| 10 | Tap a notification | **One** `⚡ onNotificationOpened` line — `action=body` for a body tap, the button id for an action button. |
+| 11 | **logout** → **getExternalId** | `null`. |
+
+Test on both Android and iOS — the same steps should give the same results. See
+[Platform differences](../README.md#platform-differences) for the few expected
+exceptions.
+
+<details>
+<summary><b>Testing against a local native SDK checkout</b></summary>
+
+By default the example uses the published native SDKs, exactly like a real app.
+To build against local checkouts placed next to this repo:
+
+```sh
+# Android — ../appsonair-push-notification-android
+cd android && ./gradlew -PappsonairLocalSdk=true :app:assembleDebug
+
+# iOS — ../appsonair-ios-push-notification
+APPSONAIR_LOCAL_SDK=1 npm run pods:new
+```
+</details>
 
 ## Troubleshooting
 
-**`[CXX1101] NDK at .../26.1.10909125 did not have a source.properties file`** —
-that NDK is half-installed. The version comes from the React Native app template
-(`android/build.gradle` → `ndkVersion`), not from this package, so you would hit it
-in any RN 0.76 app. Either finish the install in Android Studio (SDK Manager →
-SDK Tools → NDK) or point `ndkVersion` at a complete one you already have:
+**Android: `NDK ... did not have a source.properties file`** — the NDK is only
+partly installed. Reinstall it from Android Studio → SDK Manager → SDK Tools →
+NDK.
 
-```sh
-ls $ANDROID_HOME/ndk
-```
+**Android: `cannot find symbol NativeAppsonairApppushSpec`** — stale generated
+code after an architecture switch. Run `cd android && ./gradlew clean`.
 
-**`Undefined symbols: __swift_FORCE_LOAD_$_swiftCompatibility56`** (iOS link) — the
-app target has no Swift file, so Xcode omits the Swift runtime search paths. The
-Podfile's `post_install` adds them; do not remove that block. Note it uses
-`DT_TOOLCHAIN_DIR` — plain `TOOLCHAIN_DIR` resolves to the Metal toolchain under
-Xcode 26 and silently points at a path that does not exist. See the root README's
-iOS section for the alternative fix.
+**iOS: `Undefined symbols: __swift_FORCE_LOAD_$_swiftCompatibility56`** — the
+`post_install` block in `ios/Podfile` fixes this; don't remove it.
 
-**`Could not find com.android.tools.build:gradle:`** (empty version) — the second
-`includeBuild` at the bottom of `android/settings.gradle` is what supplies those
-versions. Do not remove it.
-
-**`Included build '.../node_modules/@react-native/gradle-plugin' does not exist`** —
-something reverted `android/settings.gradle` to the stock template, which
-hard-codes a path that does not exist in a workspace. It must resolve the plugin
-through Node; see the comment in that file.
-
-**Stale Codegen after switching architecture** — `cd android && ./gradlew clean`.
-Gradle caches the generated `NativeAppsonairApppushSpec`, and a switch without a
-clean is the usual cause of "cannot find symbol".
+**"The package doesn't seem to be linked"** — rebuild the app (`npm run android`
+/ `npm run ios`); for iOS, run `pod install` first.

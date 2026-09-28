@@ -11,50 +11,21 @@ Pod::Spec.new do |s|
   s.license      = package["license"]
   s.authors      = package["author"]
 
-  # The native SDK is iOS 15+ (AppsOnAir-AppPush.podspec), so this cannot go lower
-  # even where the host app's min_ios_version_supported is older.
+  # The native SDK requires iOS 15.
   s.platforms    = { :ios => "15.0" }
   s.source       = { :git => "https://github.com/apps-on-air/appsonair-react-native-push-notification.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm,swift}"
   s.swift_version = "5.9"
 
-  # Pinned so the Swift-generated header is predictably named
-  # AppsonairReactNativeApppush-Swift.h. AppsonairReactNativeApppush.mm imports it by
-  # that name; without this, CocoaPods derives the module name from the pod name
-  # and the import becomes appsonair_react_native_push-Swift.h.
+  # Fixes the generated header name (AppsonairReactNativeApppush-Swift.h) imported by the .mm.
   s.module_name  = "AppsonairReactNativeApppush"
 
-  # The native AppsOnAir Push SDK, from the CocoaPods trunk.
-  #
-  # Exact-version pin, matching the AppLink/AppSync/AppRemark wrappers. Nothing
-  # else is needed in a host app's Podfile -- `pod install` resolves it from trunk.
-  #
-  # If `pod install` cannot find the version, the spec repo is stale: run
-  # `pod repo update`. To build against a local SDK checkout instead, declare it
-  # in the host app's own Podfile, which takes precedence over this line:
-  #
-  #   pod 'AppsOnAir-AppPush', :path => '../../appsonair-ios-push-notification'
-  #
-  # See the README's iOS installation section.
-  s.dependency 'AppsOnAir-AppPush', '1.0.0-beta'
+  # Native Push SDK, pinned to an exact version. If `pod install` can't find it,
+  # run `pod repo update`. A `:path` pod in the host Podfile overrides this.
+  s.dependency 'AppsOnAir-AppPush', '1.0.4-beta'
 
-  # Compensates for a missing version floor upstream, and is not redundant with
-  # the line above: AppsOnAir-AppPush.podspec declares `core.dependency
-  # 'AppsOnAir-Core'` with no constraint, while the SDK's own Package.swift
-  # requires `from: "1.2.3"` and its AppsOnAirDeviceInfo calls
-  # AppsOnAirCoreServices.getDeviceMetadata(), which only exists in 1.2.x.
-  #
-  # A fresh `pod install` resolves the newest Core and is fine either way. The
-  # case this covers is a host app that already carries an older Core in its
-  # Podfile.lock -- likely if it also uses AppLink, AppSync or AppRemark -- where
-  # an unconstrained dependency is satisfied by 1.1.1 and the SDK then fails to
-  # compile. Remove once the upstream podspec carries its own floor.
-  s.dependency 'AppsOnAir-Core', '>= 1.2.3'
-
-  # Installs the React dependencies, and on RN >= 0.71 wires up the New
-  # Architecture (Codegen output, Folly, ReactCommon) when it is enabled. The
-  # else-branch is the pre-0.71 fallback.
+  # React dependencies (RN >= 0.71); the else-branch is the pre-0.71 fallback.
   if respond_to?(:install_modules_dependencies, true)
     install_modules_dependencies(s)
   else

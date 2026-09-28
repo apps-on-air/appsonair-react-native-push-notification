@@ -6,15 +6,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.module.model.ReactModuleInfo
 import com.facebook.react.module.model.ReactModuleInfoProvider
 
-/**
- * Autolinked entry point.
- *
- * `TurboReactPackage` serves both architectures: on the New Architecture the
- * module is looked up lazily by name through [getModule], and on the Old
- * Architecture the same lookup backs the legacy module registry. That is why
- * this file lives in src/main rather than being duplicated per source set --
- * only the module class it instantiates differs, and the build picks that.
- */
+/** Autolinked entry point; `TurboReactPackage` serves both architectures. */
 class AppsonairReactNativeApppushPackage : TurboReactPackage() {
 
   override fun getModule(

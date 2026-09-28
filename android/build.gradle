@@ -24,10 +24,7 @@ def isNewArchitectureEnabled() {
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
 
-// The React Gradle plugin runs Codegen and puts the generated NativeAppsonairApppushSpec
-// on the compile classpath. It is only applied on the New Architecture -- on the Old
-// Architecture the spec is never generated, which is why the module class that extends
-// it lives in the newarch source set rather than in main.
+// Runs Codegen to generate NativeAppsonairApppushSpec (New Architecture only).
 if (isNewArchitectureEnabled()) {
   apply plugin: "com.facebook.react"
 }
@@ -70,9 +67,7 @@ android {
     minSdkVersion getExtOrIntegerDefault("minSdkVersion")
     targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
 
-    // Read back by AppsonairReactNativeApppushPackage to tag the module as a
-    // TurboModule or a legacy module. It has to be a build constant rather than a
-    // runtime check, because ReactModuleInfo is built before any React instance exists.
+    // Read by AppsonairReactNativeApppushPackage to register a TurboModule or a legacy module.
     buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
   }
 
@@ -99,29 +94,14 @@ android {
   kotlinOptions {
     jvmTarget = "17"
 
-    // WORKAROUND -- remove once the native SDK is republished.
-    //
-    // appsonair-android-push-notification:1.0.0-beta is compiled with Kotlin
-    // 2.2.10 and sets no languageVersion/apiVersion floor, so its classes carry
-    // metadata 2.2.0. React Native pins the Kotlin compiler per release -- 1.9.24
-    // on RN 0.76, 2.0.21 on 0.77-0.78, 2.1.x on 0.79-0.81 -- and none of those can
-    // read metadata 2.2.0, so compiling this module against the AAR fails with:
-    //
-    //   Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin.
-    //   The actual metadata version is 2.2.0, but the compiler version 1.9.0 can
-    //   read versions up to 2.0.0.
-    //
-    // Raising the host's Kotlin version is not an option: KGP 2.2 breaks React
-    // Native's own Gradle plugin ("Found interface KotlinTopLevelExtension, but
-    // class was expected"). The real fix is upstream -- the SDK needs
-    // `languageVersion = "1.9"` and `apiVersion = "1.9"` in its kotlinOptions --
-    // at which point this flag and the stdlib pin below both go away.
+    // WORKAROUND (still needed with SDK 1.0.2-beta): the Android Push SDK is built
+    // with Kotlin 2.2, which the Kotlin versions React Native uses (1.9-2.1) can't
+    // read ("compiled with an incompatible version of Kotlin"). Remove this and the
+    // kotlin-stdlib pin below once the SDK sets languageVersion/apiVersion to "1.9".
     freeCompilerArgs += ["-Xskip-metadata-version-check"]
   }
 
-  // The architecture-specific module class. Both source sets declare the same
-  // class name in the same package and differ only in what they extend, so
-  // exactly one of them must ever be on the compile path.
+  // Both folders define the same module class, so only one may be compiled.
   sourceSets {
     main {
       if (isNewArchitectureEnabled()) {
@@ -147,31 +127,14 @@ dependencies {
   //noinspection GradleDynamicVersion
   implementation "com.facebook.react:react-native:+"
 
-  // `strictly`, not a plain version -- the second half of the Kotlin 2.2.10
-  // workaround documented in kotlinOptions above.
-  //
-  // The SDK's POM requires kotlin-stdlib:2.2.10, and conflict resolution carries
-  // that onto the *host app's* compileClasspath (1.9.24 -> 2.2.10), so the app's
-  // own Kotlin then fails to compile even though nothing in the app touches the
-  // SDK. `-Xskip-metadata-version-check` cannot help there: it applies to this
-  // module, not to the consumer's. Pinning the stdlib back to whatever Kotlin the
-  // host is actually compiling with keeps the app buildable.
-  //
-  // The cost: the SDK was compiled against the 2.2.10 stdlib and now runs against
-  // an older one, so any stdlib API it uses that postdates the host's Kotlin
-  // throws NoSuchMethodError at runtime. That risk is the reason this is a
-  // stopgap and not a design -- it disappears with the upstream fix.
+  // Part of the Kotlin workaround above: the SDK pulls in kotlin-stdlib 2.2.10,
+  // which would break the host app's own Kotlin compile, so pin it to the host's
+  // version. Risk: a newer stdlib API used by the SDK would fail at runtime.
   implementation("org.jetbrains.kotlin:kotlin-stdlib") {
     version { strictly kotlin_version }
   }
 
-  // The native AppsOnAir Push SDK, from JitPack -- the host app must have
-  // maven { url 'https://jitpack.io' } in its repositories. The coordinate stays
-  // overridable for teams pointing at a local build or a private repo -- set
-  // AppsonairReactNativeApppush_pushSdkCoordinate in the app's gradle.properties, or
-  // substitute a local project in settings.gradle:
-  //
-  //   includeBuild('../appsonair-push-notification-android')
-  //
+  // Native Push SDK from JitPack (the host app needs maven { url 'https://jitpack.io' }).
+  // Override via AppsonairReactNativeApppush_pushSdkCoordinate in gradle.properties.
   implementation getExtOrDefault("pushSdkCoordinate")
 }

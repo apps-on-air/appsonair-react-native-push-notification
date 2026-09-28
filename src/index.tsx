@@ -36,13 +36,8 @@ const LINKING_ERROR =
   '- You are not using Expo Go\n';
 
 /**
- * Resolves the native module on both architectures.
- *
- * `TurboModuleRegistry.get` returns the TurboModule when the New Architecture is
- * on and falls back to the legacy `NativeModules` entry when it is off, so one
- * lookup covers both. The `NativeModules` read is the belt-and-braces path for
- * hosts where the registry is unavailable; the Proxy then turns a missing module
- * into an actionable message instead of `undefined is not an object`.
+ * Resolves the native module on both architectures. If it isn't linked, the Proxy
+ * throws a clear LINKING_ERROR instead of `undefined is not an object`.
  */
 const NativePush: Spec =
   TurboModuleRegistry.get<Spec>('AppsonairReactNativeApppush') ??
@@ -57,16 +52,12 @@ const NativePush: Spec =
   ) as Spec);
 
 const emitter = new NativeEventEmitter(
-  // The legacy bridge needs the module instance to route `addListener`;
-  // the New Architecture ignores this argument entirely.
-  NativeModules.AppsonairReactNativeApppush ?? undefined
+  // Use the module resolved above: in bridgeless mode NativeModules can be empty.
+  NativePush as ConstructorParameters<typeof NativeEventEmitter>[0]
 );
 
 // MARK: - Event names
-// Kept in one place because the native bridges hardcode these same strings — a
-// rename has to happen in four files at once: here,
-// AppsonairReactNativeApppushModuleImpl.kt, AppsonairReactNativeApppushImpl.swift and
-// the supportedEvents list in AppsonairReactNativeApppush.mm.
+// Also hardcoded in both native bridges and supportedEvents in the .mm; keep in sync.
 
 const EVENT = {
   notificationReceived: 'AppsonairPush:onNotificationReceived',
@@ -83,10 +74,8 @@ const EVENT = {
 
 // MARK: - Initialization guard
 //
-// Parity I1: calling before `initialize()` emits a catchable error on iOS but
-// throws `IllegalStateException` on Android — a hard crash. The wrapper tracks
-// initialisation itself so the same misuse produces the same rejected promise
-// on both platforms and the Android `check()` never reaches the app.
+// Calling the Android SDK before initialize() crashes, so reject with the same
+// error on both platforms instead.
 
 let initialized = false;
 
@@ -116,10 +105,7 @@ function guard<T>(method: string, call: () => Promise<T>): Promise<T> {
   return call();
 }
 
-/**
- * Parity I2: `login("")` logs and returns on iOS but throws
- * `IllegalArgumentException` on Android. Validated here so neither happens.
- */
+/** Empty strings crash the Android SDK, so reject them here. */
 function requireNonEmpty(value: string, label: string): void {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new PushArgumentError(`${label} must be a non-empty string.`);
@@ -131,8 +117,9 @@ function requireNonEmpty(value: string, label: string): void {
 /**
  * Starts the SDK. Await this once, before any other call.
  *
- * On Android the wrapper supplies the `Context` itself; on iOS it resolves the
- * App Group and enables AppDelegate swizzling. Neither detail is exposed here.
+ * On Android the wrapper supplies the `Context` itself. On iOS the native SDK
+ * was already started at app launch (so a tap that launched the app is not
+ * lost); this applies `debug` and releases that tap to `onNotificationOpened`.
  */
 export async function initialize(config: PushConfig = {}): Promise<void> {
   await NativePush.initialize({ debug: config.debug ?? false });
@@ -188,10 +175,8 @@ export const getDeviceToken = getToken;
 // MARK: - Permissions
 
 /**
- * Prompts for notification permission and resolves the resulting grant state.
- *
- * Parity E1: Android needs a live Activity. The bridge resolves the current one
- * and rejects if none is attached rather than crashing.
+ * Prompts for notification permission and resolves whether it was granted.
+ * Rejects on Android if no Activity is attached.
  */
 export function requestPermission(
   options: RequestPermissionOptions = {}
@@ -201,23 +186,14 @@ export function requestPermission(
   );
 }
 
-/**
- * Whether notifications are currently permitted.
- *
- * Parity E3/E4/E6: iOS reads a cache and Android reads live, so the iOS bridge
- * refreshes first. The two native shapes (`async` vs sync, `permission` vs
- * `isPermissionGranted`) are collapsed into this one promise.
- */
+/** Whether notifications are currently permitted. */
 export function getPermission(): Promise<boolean> {
   return guard('getPermission', () => NativePush.getPermission());
 }
 
 /**
- * The granular permission state.
- *
- * Parity C7: iOS reports all five values. **Android reports only `authorized`
- * or `denied`** — it never returns `notDetermined`, so do not gate a
- * cross-platform pre-prompt on that value.
+ * The detailed permission state. **Android reports only `authorized` or
+ * `denied`** (never `notDetermined`).
  */
 export function getPermissionStatus(): Promise<PermissionStatus> {
   return guard('getPermissionStatus', () =>
@@ -226,12 +202,9 @@ export function getPermissionStatus(): Promise<PermissionStatus> {
 }
 
 /**
- * Whether a permission prompt can still be shown.
- *
- * Parity E2 — **known divergence, not yet fixed in the native SDKs.** iOS
- * returns `true` only before the user has ever been asked. Android returns
- * `true` whenever permission is not granted, *including after a permanent
- * denial*. Treat a `true` on Android as "not granted", not as "never asked".
+ * Whether a permission prompt can still be shown. iOS returns `true` only before
+ * the first prompt; **Android returns `true` whenever permission isn't granted**,
+ * even after a permanent denial.
  */
 export function canRequestPermission(): Promise<boolean> {
   return guard('canRequestPermission', () => NativePush.canRequestPermission());
@@ -255,11 +228,8 @@ export const notifications = {
   },
 
   /**
-   * Dismisses one notification by its payload `notification_id`.
-   *
-   * Parity F2: on Android the id is hashed to find the posted notification, so
-   * two ids that hash alike could collide. iOS matches the request identifier
-   * exactly.
+   * Dismisses one notification by its payload `notification_id`. On Android the id
+   * is hashed, so two ids could rarely collide.
    */
   remove(notificationId: string): Promise<void> {
     requireNonEmpty(notificationId, 'notificationId');
@@ -293,22 +263,16 @@ export const notifications = {
 
 export const badge = {
   /**
-   * The SDK's badge count.
-   *
-   * Parity G1/G3: iOS reads the OS badge. Android has no OS read API, so this
-   * returns the SDK's own persisted value, which can drift from what the
-   * launcher actually shows.
+   * The badge count. On Android this is the SDK's stored value, which may differ
+   * from what the launcher shows.
    */
   get(): Promise<number> {
     return guard('badge.get', () => NativePush.getBadgeCount());
   },
 
   /**
-   * Sets the badge count.
-   *
-   * Parity G3: reliable on iOS. On Android this is a best-effort launcher
-   * broadcast that silently does nothing outside Samsung / MIUI / ASUS — which
-   * is why nothing here reports success.
+   * Sets the badge count. On Android this only works on some launchers
+   * (e.g. Samsung, MIUI, ASUS).
    */
   set(count: number): Promise<void> {
     if (!Number.isFinite(count) || count < 0) {
@@ -369,14 +333,8 @@ export const user = {
   },
 
   /**
-   * The user's tags.
-   *
-   * **Android round-trips to the backend** once the device has a
-   * `subscriptionId`, replacing its local cache with the result; before
-   * registration it resolves the local cache without a network call. **iOS reads
-   * its local cache only.** So a tag set on another device shows up on Android
-   * and not on iOS, and the Android call can reject on a network failure where
-   * iOS cannot.
+   * The user's tags. **Android fetches them from the backend** (so it can fail
+   * offline); **iOS returns its local copy.**
    */
   getTags(): Promise<Record<string, string>> {
     return guard('user.getTags', () => NativePush.getTags()) as Promise<
@@ -403,13 +361,7 @@ export const user = {
     return guard('user.removeAliases', () => NativePush.removeAliases(labels));
   },
 
-  /**
-   * Adds an email identifier.
-   *
-   * Parity A5 — **known Android bug.** Android persists emails but never reads
-   * them back on restart, so an email added here silently vanishes when the app
-   * relaunches. The wrapper cannot work around it; it needs an SDK fix.
-   */
+  /** Adds an email and syncs it to the backend. */
   addEmail(address: string): Promise<void> {
     requireNonEmpty(address, 'email address');
     return guard('user.addEmail', () => NativePush.addEmail(address));
@@ -428,10 +380,8 @@ export const user = {
   },
 
   /**
-   * The device language.
-   *
-   * Parity 1.5 — Android reads this live; iOS snapshots it once at init and
-   * never refreshes, so a mid-session language change is stale on iOS.
+   * The device language. On iOS it's read once at startup, so a change during the
+   * session isn't picked up.
    */
   getLanguage(): Promise<string> {
     return guard('user.getLanguage', () => NativePush.getLanguage());
@@ -455,19 +405,10 @@ export const user = {
   },
 
   /**
-   * The subscription's enabled state as the backend sees it.
-   *
-   * Distinct from `getPushSubscription().optedIn`, which is the purely local
-   * `!optedOut` flag on both platforms. The two derive it differently and
-   * converge only in steady state:
-   *
-   * - **Android** reads it back from `/subscriptions`, so it reflects what the
-   *   server actually stored. Before the device registers it falls back to the
-   *   local value without a network call.
-   * - **iOS** computes the same flag it would send: an APNs token exists, the
-   *   user has not opted out, *and* the OS currently grants permission. So
-   *   revoking permission in Settings flips this to `false` on iOS while
-   *   Android keeps reporting the server's stored value.
+   * Whether the subscription is enabled on the backend (unlike
+   * `getPushSubscription().optedIn`, which only reflects opt-out).
+   * - **Android** reads the server's value.
+   * - **iOS** computes it: has a token, not opted out, and permission granted.
    */
   getOptedIn(): Promise<boolean> {
     return guard('user.getOptedIn', () => NativePush.getOptedIn());
@@ -476,9 +417,7 @@ export const user = {
 
 // MARK: - Consent
 //
-// Parity I5: both SDKs store these flags but neither enforces them. They are
-// exposed because they round-trip, but they are not a compliance control yet —
-// setting `consentGiven` to false does not currently gate anything.
+// Note: these flags are stored but not enforced yet; `consentGiven = false` blocks nothing.
 
 export const consent = {
   setRequired(required: boolean): Promise<void> {
@@ -531,20 +470,8 @@ export function onNotificationOpened(
 }
 
 /**
- * Fires in the foreground *before* the notification is displayed, giving you a
- * chance to suppress it.
- *
- * `preventDefault()` must be called synchronously inside the handler — the
- * native side is holding the notification until this returns, and releases it
- * anyway after a short timeout so a throwing handler cannot wedge delivery.
- *
- * All registered handlers run; the notification is suppressed if *any* of them
- * calls `preventDefault()`.
- *
- * **`preventDefault()` is honoured on Android only.** iOS decides presentation
- * synchronously and cannot wait for a JS answer — see
- * {@link NotificationWillDisplayEvent.preventDefault}. The event itself fires on
- * both platforms.
+ * Fires in the foreground before a notification is displayed. Call
+ * `preventDefault()` synchronously in any handler to suppress it (**Android only**).
  */
 export function onNotificationWillDisplay(
   callback: (event: NotificationWillDisplayEvent) => void
@@ -567,12 +494,7 @@ type WillDisplayHandler = (event: NotificationWillDisplayEvent) => void;
 const willDisplayHandlers = new Set<WillDisplayHandler>();
 let willDisplayBridge: EmitterSubscription | null = null;
 
-/**
- * One emitter subscription fans out to every handler, so
- * `completeNotificationWillDisplay` is called exactly once per notification no
- * matter how many handlers are registered. Completing twice would release the
- * same held notification twice on the native side.
- */
+/** One native subscription for all handlers, so each notification is completed once. */
 function ensureWillDisplayBridge(): void {
   if (willDisplayBridge) return;
 
@@ -591,9 +513,7 @@ function ensureWillDisplayBridge(): void {
         try {
           handler(event);
         } catch (error) {
-          // A throwing handler must not stop the remaining handlers, and must
-          // not prevent the completion call below — otherwise the native side
-          // holds the notification until its timeout for no reason.
+          // A throwing handler must not block the others or the completion call below.
           console.error(
             '[AppPushService] onNotificationWillDisplay handler threw',
             error
@@ -604,8 +524,7 @@ function ensureWillDisplayBridge(): void {
       const id = payload.notification?.id;
       if (id != null) {
         NativePush.completeNotificationWillDisplay(id, !prevented).catch(() => {
-          // The native side falls back to displaying the notification when the
-          // completion never lands, so there is nothing to recover here.
+          // Native shows the notification on timeout, so nothing to recover.
         });
       }
     }
@@ -634,20 +553,9 @@ export function onUserStateChanged(
 }
 
 /**
- * Fires when the device registration token is issued or refreshed.
- *
- * This is the push-side counterpart to {@link getToken}: the getter answers
- * "what is the token now", this answers "the token just changed" — which is when
- * your backend needs to hear about it. A token can rotate at any point in a
- * session, so a one-shot `getToken()` at startup will eventually go stale.
- *
- * `environment` is the APNs endpoint the backend must send to. It is
- * `'sandbox'` or `'production'` on iOS and always `null` on Android, where FCM
- * routes for you.
- *
- * Events raised before the first subscriber exists are dropped rather than
- * queued on both platforms, so read {@link getToken} once after subscribing if
- * you need the current value too.
+ * Fires when the push token is issued or refreshed. `environment` is
+ * `'sandbox'`/`'production'` on iOS and `null` on Android. Events before you
+ * subscribe are dropped, so call {@link getToken} for the current value.
  */
 export function onTokenUpdated(
   callback: (event: TokenUpdatedEvent) => void
@@ -656,15 +564,8 @@ export function onTokenUpdated(
 }
 
 /**
- * Fires on an SDK-level failure — token registration, a denied permission, a
- * missing Firebase config.
- *
- * These are conditions the SDK hits on its own schedule, outside any call you
- * made, so they surface here rather than as a rejected promise. A promise
- * rejection from a method you called carries the same `code` values.
- *
- * Without a subscriber these failures are silent, which is why this is worth
- * wiring even if it only ever logs.
+ * Fires on background SDK failures (e.g. token registration, missing Firebase
+ * config). Without a subscriber these are silent.
  */
 export function onError(
   callback: (event: PushErrorEvent) => void
@@ -672,30 +573,14 @@ export function onError(
   return subscribe(EVENT.error, callback);
 }
 
-/**
- * Fires for a data-only push that is delivered without being displayed.
- *
- * Supported on both platforms, but they are triggered differently and your
- * backend has to send for both: iOS uses the APNs `content-available` flag,
- * while Android keys off a `silent: "true"` data entry, since FCM has no
- * transport-level equivalent. See {@link SilentNotificationEvent}.
- *
- * iOS invokes the OS completion handler as soon as this event is emitted, so
- * the handler cannot extend the app's background execution window: treat it as
- * a notification that the payload arrived, not as a place to await work.
- */
+/** Fires for a data-only push that isn't displayed. See {@link SilentNotificationEvent}. */
 export function onSilentNotification(
   callback: (event: SilentNotificationEvent) => void
 ): Subscription {
   return subscribe(EVENT.silentNotification, callback);
 }
 
-/**
- * Fires when the Firebase Installation ID becomes available.
- *
- * **Android only** — the event name is registered on iOS so the two bridges
- * stay diffable, but nothing ever emits it there.
- */
+/** Fires when the Firebase Installation ID is available. **Android only.** */
 export function onInstallationIdUpdated(
   callback: (event: InstallationIdEvent) => void
 ): Subscription {

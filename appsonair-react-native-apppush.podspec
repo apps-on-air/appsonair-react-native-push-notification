@@ -23,7 +23,7 @@ Pod::Spec.new do |s|
 
   # Native Push SDK, pinned to an exact version. If `pod install` can't find it,
   # run `pod repo update`. A `:path` pod in the host Podfile overrides this.
-  s.dependency 'AppsOnAir-AppPush', '1.0.3-beta'
+  s.dependency 'AppsOnAir-AppPush', '1.0.4-beta'
 
   # React dependencies (RN >= 0.71); the else-branch is the pre-0.71 fallback.
   if respond_to?(:install_modules_dependencies, true)

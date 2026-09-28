@@ -5,7 +5,7 @@ one JavaScript API. Works on both the New and the Old Architecture with no code
 changes.
 
 > [!WARNING]
-> **Beta — not for production use.** `1.0.1-beta` is intended for evaluation and
+> **Beta** `1.0.1-beta` is intended for evaluation and
 > internal test builds. The API may change between releases, so pin the exact
 > version and re-test on every upgrade.
 
@@ -62,7 +62,9 @@ iOS only shows images and attachments if a **Notification Service Extension**
 (NSE) downloads them. Android needs nothing extra.
 
 1. In Xcode: **File → New → Target → Notification Service Extension**, e.g.
-   `NotificationService`.
+   `NotificationService`. Xcode sets the new target's **iOS Deployment Target**
+   to the latest iOS; lower it to match your app (15.0 or higher), or iOS will
+   never run the extension on older devices.
 2. Add an **App Group** to **both** the app target and the extension target,
    named `group.<your-app-bundle-id>.appsonair`. If you use another name, add it
    to both `Info.plist` files:
@@ -400,7 +402,17 @@ your app target has no Swift files. In Xcode, add an empty `.swift` file to the
 app target and accept the bridging header it offers.
 
 **iOS images don't show** — set up the [Notification Service
-Extension](#ios-setup) and make sure the push has `"mutable-content": 1`.
+Extension](#ios-setup) and make sure the push has `"mutable-content": 1`. If
+the extension never runs, check that its iOS Deployment Target isn't higher
+than the device's iOS version; iOS skips the extension without logging anything.
+
+**`pod install` fails with `Unable to find compatibility version string for object
+version 70`** — Xcode 16+ adds new targets as synchronized folders, which
+CocoaPods can't read yet. In Xcode, right-click the extension's folder →
+**Convert to Group**, then run `pod install` again.
+
+**`pod install` still installs an older `AppsOnAir-AppPush` after upgrading** —
+your `Podfile.lock` is pinning it. Run `pod update AppsOnAir-AppPush`.
 
 ## Example app
 

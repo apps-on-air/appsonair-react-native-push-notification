@@ -52,6 +52,16 @@ target 'AppsOnAirPushExample' do
       # :ccache_enabled => true
     )
 
+    # The app and the extension each build AppsOnAir-AppPush under the same module
+    # name, so Archive fails with "Multiple commands produce ... Metadata.appintents".
+    # The SDK has no App Intents, so skip that step.
+    installer.pods_project.targets.each do |pod_target|
+      next unless pod_target.name.start_with?('AppsOnAir-AppPush')
+      pod_target.build_configurations.each do |build_config|
+        build_config.build_settings['LM_SKIP_METADATA_EXTRACTION'] = 'YES'
+      end
+    end
+
     # --- Swift runtime search paths for an ObjC-only app target ---------------
     # This wrapper, and the AppsOnAir SDKs under it, are Swift static libraries.
     # This app target has no Swift source of its own (AppDelegate.mm, main.m), so

@@ -72,13 +72,30 @@ iOS only shows images and attachments if a **Notification Service Extension**
    <string>group.com.yourcompany.app.appsonair</string>
    ```
 
-3. Add the extension target to `ios/Podfile`, then run `pod install`:
+3. Add the extension target to `ios/Podfile`, using the target's exact name
+   from Xcode:
 
    ```ruby
    target 'NotificationService' do
      pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.3-beta'
    end
    ```
+
+   Inside the existing `post_install do |installer|` block, add the following.
+   Without it, **Product → Archive** fails with `Multiple commands produce
+   ... AppsOnAir_AppPush/Metadata.appintents`, because the app and the extension
+   each build the SDK under the same module name:
+
+   ```ruby
+   installer.pods_project.targets.each do |pod_target|
+     next unless pod_target.name.start_with?('AppsOnAir-AppPush')
+     pod_target.build_configurations.each do |build_config|
+       build_config.build_settings['LM_SKIP_METADATA_EXTRACTION'] = 'YES'
+     end
+   end
+   ```
+
+   Then run `pod install`.
 
 4. Replace the generated `NotificationService.swift`:
 

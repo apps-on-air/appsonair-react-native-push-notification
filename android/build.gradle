@@ -94,7 +94,7 @@ android {
   kotlinOptions {
     jvmTarget = "17"
 
-    // WORKAROUND (still needed with SDK 1.0.2-beta): the Android Push SDK is built
+    // WORKAROUND (still needed with SDK 1.0.3-beta): the Android Push SDK is built
     // with Kotlin 2.2, which the Kotlin versions React Native uses (1.9-2.1) can't
     // read ("compiled with an incompatible version of Kotlin"). Remove this and the
     // kotlin-stdlib pin below once the SDK sets languageVersion/apiVersion to "1.9".

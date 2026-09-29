@@ -87,6 +87,9 @@ export default function App() {
       AppPushService.onUserStateChanged((e) =>
         append('event', `onUserStateChanged externalId=${e.current.externalId ?? 'null'}`)
       ),
+        AppPushService.onSilentNotification((e) =>
+        append('event', `onSilentNotification "${JSON.stringify(e) ?? ''}"`)
+      ),
     ];
     return () => subs.forEach((s) => s.remove());
   }, [append]);
@@ -94,6 +97,7 @@ export default function App() {
   const initialize = useCallback(async () => {
     append('call', 'initialize');
     try {
+      AppPushService.debug.setLogLevel('verbose');
       await AppPushService.initialize({ debug: true });
       setInitialized(AppPushService.isInitialized());
       append('ok', 'initialize → ready');
@@ -131,7 +135,10 @@ export default function App() {
         </Section>
 
         <Section title="Token" theme={theme}>
-          <Btn label="getToken" onPress={run('getToken', async () => await AppPushService.getToken())} theme={theme} />
+          <Btn label="getToken" onPress={run('getToken', async () => {
+            const token =await AppPushService.getToken()
+            console.log('token', token)
+            })} theme={theme} />
           <Btn label="getDeviceToken" onPress={run('getDeviceToken', async () => await AppPushService.getDeviceToken())} theme={theme} />
         </Section>
 

@@ -65,5 +65,5 @@ target 'AppsOnAirPushExample' do
 end
 
 target 'AppsonairNotificationServiceExtension' do
-  pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.4-beta'
+  pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.5-beta'
 end

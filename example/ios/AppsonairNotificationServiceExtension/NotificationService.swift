@@ -1,4 +1,4 @@
-import AppsOnAir_AppPush
+import AppsOnAir_AppPush_ServiceExt
 
 // Downloads rich media and reports the "delivered" receipt for pushes that
 // arrive while the app is in the background or killed -- the app itself does

@@ -5,7 +5,7 @@ one JavaScript API. Works on both the New and the Old Architecture with no code
 changes.
 
 > [!WARNING]
-> **Beta** `1.0.4-beta` is intended for evaluation and
+> **Beta** `1.0.5-beta` is intended for evaluation and
 > internal test builds. The API may change between releases, so pin the exact
 > version and re-test on every upgrade.
 
@@ -32,7 +32,7 @@ changes.
 ## Installation
 
 ```sh
-npm install appsonair-react-native-apppush@1.0.4-beta
+npm install appsonair-react-native-apppush@1.0.5-beta
 cd ios && pod install
 ```
 
@@ -79,14 +79,18 @@ iOS only shows images and attachments if a **Notification Service Extension**
 
    ```ruby
    target 'NotificationService' do
-     pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.5-beta'
+     pod 'AppsOnAir-AppPush-ServiceExt', '1.0.6-beta'
    end
    ```
+
+   Use the `AppsOnAir-AppPush-ServiceExt` pod, not the deprecated
+   `AppsOnAir-AppPush/ServiceExtension` subspec — the subspec makes archiving
+   fail (see [Troubleshooting](#troubleshooting)).
 
 4. Replace the generated `NotificationService.swift`:
 
    ```swift
-   import AppsOnAir_AppPush
+   import AppsOnAir_AppPush_ServiceExt
 
    class NotificationService: AppsOnAirNotificationServiceExtension {}
    ```
@@ -166,6 +170,10 @@ On iOS the native SDK already starts at app launch, so no `AppDelegate` code is
 needed. That's what lets it record a tap that opens a killed app. The tap is held
 and delivered to `onNotificationOpened` once `initialize()` resolves, the same as
 on Android.
+
+This also works alongside other libraries that set the iOS notification
+delegate, such as Notifee: AppsOnAir pushes still reach the SDK, and the other
+library keeps receiving its own notifications.
 
 ```ts
 import AppPushService from 'appsonair-react-native-apppush';
@@ -396,7 +404,32 @@ CocoaPods can't read yet. In Xcode, right-click the extension's folder →
 **Convert to Group**, then run `pod install` again.
 
 **`pod install` still installs an older `AppsOnAir-AppPush` after upgrading** —
-your `Podfile.lock` is pinning it. Run `pod update AppsOnAir-AppPush`.
+your `Podfile.lock` is pinning it. Run
+`pod update AppsOnAir-AppPush AppsOnAir-AppPush-ServiceExt`.
+
+**`pod install` fails with `Unable to find a specification for
+AppsOnAir-AppPush-ServiceExt`** — your local spec index is out of date. Run
+`pod install --repo-update`.
+
+**iOS archive fails with `Multiple commands produce …/AppsOnAir_AppPush.framework`** —
+your extension target uses the deprecated `AppsOnAir-AppPush/ServiceExtension`
+subspec, which builds a second framework with the same name as the app's. Switch
+to the standalone pod and update the import in `NotificationService.swift`:
+
+```diff
+ target 'NotificationService' do
+-  pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.5-beta'
++  pod 'AppsOnAir-AppPush-ServiceExt', '1.0.6-beta'
+ end
+```
+
+```diff
+-import AppsOnAir_AppPush
++import AppsOnAir_AppPush_ServiceExt
+```
+
+Then run `pod install` and remove any `post_install` workaround that renamed
+the extension's framework.
 
 ## Example app
 

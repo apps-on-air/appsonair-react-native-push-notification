@@ -65,5 +65,9 @@ target 'AppsOnAirPushExample' do
 end
 
 target 'AppsonairNotificationServiceExtension' do
-  pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.5-beta'
+  if ENV['APPSONAIR_LOCAL_SDK'] == '1'
+    pod 'AppsOnAir-AppPush-ServiceExt', :path => '../../../appsonair-ios-push-notification'
+  else
+    pod 'AppsOnAir-AppPush-ServiceExt', '1.0.6-beta'
+  end
 end

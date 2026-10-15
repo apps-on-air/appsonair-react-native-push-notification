@@ -5,6 +5,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  DeviceEventEmitter,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -48,6 +49,7 @@ export default function App() {
   const [groupKey, setGroupKey] = useState('demo-group');
 
   const append = useCallback((kind: LogEntry['kind'], text: string) => {
+    console.log(`[example] ${kind}: ${text}`);
     setLog((prev) => [{ id: nextId.current++, kind, text }, ...prev].slice(0, 60));
   }, []);
 
@@ -69,6 +71,9 @@ export default function App() {
   // Subscribe to the events shown in the log.
   useEffect(() => {
     initialize()
+    // Not awaited on purpose: calls made while initialize() is in flight now wait for it
+    // instead of rejecting with notInitialized.
+    run('getDeviceId while initialize() is in flight', () => AppPushService.getDeviceId())();
     const subs = [
       AppPushService.onNotificationReceived((e) =>
         append('event', `onNotificationReceived "${e.notification.title ?? ''}"`)
@@ -92,7 +97,7 @@ export default function App() {
       ),
     ];
     return () => subs.forEach((s) => s.remove());
-  }, [append]);
+  }, [append, run]);
 
   const initialize = useCallback(async () => {
     append('call', 'initialize');
@@ -116,6 +121,31 @@ export default function App() {
           <Btn
             label="guard check (before init)"
             onPress={run('getDeviceId', () => AppPushService.getDeviceId())}
+            theme={theme}
+          />
+          <Btn
+            label="getDiagnostics"
+            onPress={run('getDiagnostics', () => AppPushService.getDiagnostics())}
+            theme={theme}
+          />
+          <Btn
+            label="simulate onError (no subscriber yet)"
+            onPress={() => {
+              // Same path as a native error event; held until something subscribes to onError.
+              DeviceEventEmitter.emit('AppsonairPush:onError', {
+                code: 'unknown',
+                message: `simulated at ${new Date().toLocaleTimeString()}`,
+              });
+              append('call', 'emitted simulated onError');
+            }}
+            theme={theme}
+          />
+          <Btn
+            label="subscribe onError (late)"
+            onPress={() => {
+              AppPushService.onError((e) => append('event', `onError [${e.code}] ${e.message}`));
+              append('ok', 'onError subscribed');
+            }}
             theme={theme}
           />
         </Section>

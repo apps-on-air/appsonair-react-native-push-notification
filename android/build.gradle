@@ -93,12 +93,6 @@ android {
 
   kotlinOptions {
     jvmTarget = "17"
-
-    // WORKAROUND (still needed with SDK 1.0.6-beta): the Android Push SDK is built
-    // with Kotlin 2.2, which the Kotlin versions React Native uses (1.9-2.1) can't
-    // read ("compiled with an incompatible version of Kotlin"). Remove this and the
-    // kotlin-stdlib pin below once the SDK sets languageVersion/apiVersion to "1.9".
-    freeCompilerArgs += ["-Xskip-metadata-version-check"]
   }
 
   // Both folders define the same module class, so only one may be compiled.
@@ -119,20 +113,11 @@ repositories {
   maven { url 'https://jitpack.io' }
 }
 
-def kotlin_version = getExtOrDefault("kotlinVersion")
-
 dependencies {
   // For < 0.71 this resolves from the local maven repo; for > 0.71 the React
   // Gradle plugin rewrites it to com.facebook.react:react-android:$version.
   //noinspection GradleDynamicVersion
   implementation "com.facebook.react:react-native:+"
-
-  // Part of the Kotlin workaround above: the SDK pulls in kotlin-stdlib 2.2.10,
-  // which would break the host app's own Kotlin compile, so pin it to the host's
-  // version. Risk: a newer stdlib API used by the SDK would fail at runtime.
-  implementation("org.jetbrains.kotlin:kotlin-stdlib") {
-    version { strictly kotlin_version }
-  }
 
   // Native Push SDK from JitPack (the host app needs maven { url 'https://jitpack.io' }).
   // Override via AppsonairReactNativeApppush_pushSdkCoordinate in gradle.properties.

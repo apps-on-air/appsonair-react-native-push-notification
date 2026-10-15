@@ -150,12 +150,31 @@ export type PushErrorCode =
   /** **Android only.** No `google-services.json`, or the plugin was not applied. */
   | 'firebaseNotConfigured'
   | 'tokenRegistrationFailed'
+  /**
+   * **iOS only.** Neither APNs callback arrived after `registerForRemoteNotifications()`.
+   * Usually another library proxies the AppDelegate; forward the token manually.
+   */
+  | 'apnsCallbackNotReceived'
   | 'installationIdFetchFailed'
   | 'unknown';
 
 export interface PushErrorEvent {
   code: PushErrorCode;
   message: string;
+}
+
+/** Returned by `getDiagnostics()`. */
+export interface PushDiagnostics {
+  /** Whether `initialize()` has completed in this JS context. */
+  initialized: boolean;
+  /** Whether an APNs (iOS) or FCM (Android) token has been issued. */
+  hasToken: boolean;
+  /** The backend subscription id. `null` until the device registers. */
+  subscriptionId: string | null;
+  /** Notification permission. `null` before `initialize()`. */
+  permission: boolean | null;
+  /** The most recent `onError` event in this JS context, even one nobody was subscribed to. */
+  lastError: PushErrorEvent | null;
 }
 
 // MARK: - Enums

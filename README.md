@@ -5,7 +5,7 @@ one JavaScript API. Works on both the New and the Old Architecture with no code
 changes.
 
 > [!WARNING]
-> **Beta** `1.0.5-beta` is intended for evaluation and
+> **Beta** `1.0.6-beta` is intended for evaluation and
 > internal test builds. The API may change between releases, so pin the exact
 > version and re-test on every upgrade.
 
@@ -32,7 +32,7 @@ changes.
 ## Installation
 
 ```sh
-npm install appsonair-react-native-apppush@1.0.5-beta
+npm install appsonair-react-native-apppush@1.0.6-beta
 cd ios && pod install
 ```
 
@@ -79,7 +79,7 @@ iOS only shows images and attachments if a **Notification Service Extension**
 
    ```ruby
    target 'NotificationService' do
-     pod 'AppsOnAir-AppPush-ServiceExt', '1.0.6-beta'
+     pod 'AppsOnAir-AppPush-ServiceExt', '1.0.7-beta'
    end
    ```
 
@@ -163,8 +163,10 @@ Set both pairs to the same values so every notification looks the same.
 
 ### Initialize and ask for permission
 
-Call `initialize()` once, as early as possible. Every other method rejects with
-`notInitialized` until it resolves.
+Call `initialize()` once, as early as possible. Methods called while it is still
+running wait for it, so screens that mount early don't need to await it
+themselves. Methods called before `initialize()` was ever called reject with
+`notInitialized`. If it fails, the next call to `initialize()` retries.
 
 On iOS the native SDK already starts at app launch, so no `AppDelegate` code is
 needed. That's what lets it record a tap that opens a killed app. The tap is held
@@ -275,8 +277,9 @@ All methods return a `Promise` except `isInitialized()`. Import the default
 
 | Method | Description |
 |---|---|
-| `initialize({ debug? })` | Starts the SDK. Call once at startup. |
+| `initialize({ debug? })` | Starts the SDK. Call once at startup; other calls wait for it. |
 | `isInitialized()` | `boolean`, synchronous. |
+| `getDiagnostics()` | `{ initialized, hasToken, subscriptionId, permission, lastError }`, for logging or crash reports when a device doesn't register. |
 | `login(externalId)` | Links the device to your user id. Alias: `setUserId`. |
 | `logout()` | Unlinks the user; the device becomes anonymous. |
 | `getExternalId()` | Current user id, or `null`. |
@@ -344,7 +347,7 @@ Each returns `{ remove() }`.
 | `onSubscriptionChanged` | `{ previous, current }` | Token or opt-in state changes. |
 | `onUserStateChanged` | `{ current }` | `login()` / `logout()` changes the user. |
 | `onSilentNotification` | `{ data }` | A data-only push arrives. |
-| `onError` | `{ code, message }` | A background SDK error, e.g. token registration failed. |
+| `onError` | `{ code, message }` | A background SDK error, e.g. token registration failed. Errors raised before you subscribe are held and delivered to the first subscriber. |
 
 ### Notification object
 
@@ -419,7 +422,7 @@ to the standalone pod and update the import in `NotificationService.swift`:
 ```diff
  target 'NotificationService' do
 -  pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.5-beta'
-+  pod 'AppsOnAir-AppPush-ServiceExt', '1.0.6-beta'
++  pod 'AppsOnAir-AppPush-ServiceExt', '1.0.7-beta'
  end
 ```
 

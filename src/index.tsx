@@ -16,6 +16,7 @@ import type {
   PermissionChangedEvent,
   PermissionStatus,
   PushConfig,
+  PushDiagnostics,
   PushErrorEvent,
   PushNotification,
   PushSubscriptionChangedEvent,
@@ -74,10 +75,12 @@ const EVENT = {
 
 // MARK: - Initialization guard
 //
-// Calling the Android SDK before initialize() crashes, so reject with the same
-// error on both platforms instead.
+// Calling the Android SDK before initialize() crashes. Calls made while
+// initialize() is in flight wait for it; calls made before it was ever called
+// reject with the same error on both platforms.
 
 let initialized = false;
+let initPromise: Promise<void> | null = null;
 
 class PushNotInitializedError extends Error {
   readonly code = 'notInitialized';
@@ -99,10 +102,9 @@ class PushArgumentError extends Error {
 }
 
 function guard<T>(method: string, call: () => Promise<T>): Promise<T> {
-  if (!initialized) {
-    return Promise.reject(new PushNotInitializedError(method));
-  }
-  return call();
+  if (initialized) return call();
+  if (initPromise) return initPromise.then(call);
+  return Promise.reject(new PushNotInitializedError(method));
 }
 
 /** Empty strings crash the Android SDK, so reject them here. */
@@ -115,15 +117,27 @@ function requireNonEmpty(value: string, label: string): void {
 // MARK: - Lifecycle
 
 /**
- * Starts the SDK. Await this once, before any other call.
+ * Starts the SDK. Call it once, as early as possible.
+ *
+ * Other methods called while this is still in flight wait for it, so they
+ * don't need to await it themselves. Calling it again returns the same
+ * promise; after a failure, the next call retries.
  *
  * On Android the wrapper supplies the `Context` itself. On iOS the native SDK
  * was already started at app launch (so a tap that launched the app is not
  * lost); this applies `debug` and releases that tap to `onNotificationOpened`.
  */
-export async function initialize(config: PushConfig = {}): Promise<void> {
-  await NativePush.initialize({ debug: config.debug ?? false });
-  initialized = true;
+export function initialize(config: PushConfig = {}): Promise<void> {
+  initPromise ??= NativePush.initialize({ debug: config.debug ?? false }).then(
+    () => {
+      initialized = true;
+    },
+    (error: unknown) => {
+      initPromise = null;
+      throw error;
+    }
+  );
+  return initPromise;
 }
 
 /** Whether {@link initialize} has completed in this JS context. */
@@ -563,14 +577,66 @@ export function onTokenUpdated(
   return subscribe(EVENT.tokenUpdated, callback);
 }
 
+// One native subscription from module load, so errors raised before the app
+// subscribes (e.g. during launch or initialize()) are held instead of dropped.
+const MAX_PENDING_ERRORS = 20;
+const errorHandlers = new Set<(event: PushErrorEvent) => void>();
+const pendingErrors: PushErrorEvent[] = [];
+let lastError: PushErrorEvent | null = null;
+
+emitter.addListener(EVENT.error, (event: PushErrorEvent) => {
+  lastError = event;
+  if (errorHandlers.size === 0) {
+    pendingErrors.push(event);
+    if (pendingErrors.length > MAX_PENDING_ERRORS) pendingErrors.shift();
+    return;
+  }
+  errorHandlers.forEach((handler) => handler(event));
+});
+
 /**
  * Fires on background SDK failures (e.g. token registration, missing Firebase
- * config). Without a subscriber these are silent.
+ * config). Errors raised before the first subscriber are held (up to 20) and
+ * delivered to it.
  */
 export function onError(
   callback: (event: PushErrorEvent) => void
 ): Subscription {
-  return subscribe(EVENT.error, callback);
+  errorHandlers.add(callback);
+  const held = pendingErrors.splice(0);
+  if (held.length > 0) {
+    // After this call returns, so the caller holds its subscription first.
+    Promise.resolve().then(() => held.forEach((event) => callback(event)));
+  }
+  return { remove: () => errorHandlers.delete(callback) };
+}
+
+/**
+ * A snapshot of the SDK's state for logging or crash reports, e.g. when a
+ * device never registers. Safe to call before {@link initialize}.
+ */
+export async function getDiagnostics(): Promise<PushDiagnostics> {
+  if (!initialized) {
+    return {
+      initialized: false,
+      hasToken: false,
+      subscriptionId: null,
+      permission: null,
+      lastError,
+    };
+  }
+  const [token, subscriptionId, permission] = await Promise.all([
+    NativePush.getToken(),
+    NativePush.getSubscriptionId(),
+    NativePush.getPermission(),
+  ]);
+  return {
+    initialized: true,
+    hasToken: token != null,
+    subscriptionId,
+    permission,
+    lastError,
+  };
 }
 
 /** Fires for a data-only push that isn't displayed. See {@link SilentNotificationEvent}. */
@@ -592,6 +658,7 @@ export function onInstallationIdUpdated(
 const AppPushService = {
   initialize,
   isInitialized,
+  getDiagnostics,
 
   getDeviceId,
   getSubscriptionId,

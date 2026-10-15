@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import AppsOnAir_AppPush
 
 #if canImport(React)
@@ -30,6 +31,12 @@ public class AppsonairReactNativeApppushImpl: NSObject {
   /// Taps received before JS was ready (e.g. the tap that launched the app).
   /// Sent once JS has called initialize() and subscribed, like Android does.
   private var pendingOpened: [[String: Any]] = []
+
+  /// Errors raised before JS was ready (e.g. APNs registration failing at launch).
+  /// Without this they were dropped, and launch-time failures were invisible. Capped so
+  /// a failure that repeats before JS ever subscribes can't grow it without bound.
+  private var pendingErrors: [[String: Any]] = []
+  private static let maxPendingErrors = 20
 
   private var sdkInitialized = false
 
@@ -69,15 +76,20 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     DispatchQueue.main.async {
       guard self.owner === owner else { return }
       self.jsListening = listening
-      self.flushPendingOpened()
+      self.flushPending()
     }
   }
 
-  private func flushPendingOpened() {
-    guard jsInitialized, jsListening, !pendingOpened.isEmpty else { return }
-    let events = pendingOpened
+  /// Sends what was held while JS wasn't ready: errors first, then taps.
+  private func flushPending() {
+    guard jsInitialized, jsListening else { return }
+    let errors = pendingErrors
+    pendingErrors.removeAll()
+    errors.forEach { emit(Event.error, $0) }
+
+    let opened = pendingOpened
     pendingOpened.removeAll()
-    events.forEach { emit(Event.notificationOpened, $0) }
+    opened.forEach { emit(Event.notificationOpened, $0) }
   }
 
   // MARK: - Launch
@@ -104,8 +116,22 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     guard !sdkInitialized else { return }
     sdkInitialized = true
 
+    let app = UIApplication.shared
+    let tokenSelector = #selector(UIApplicationDelegate.application(_:didRegisterForRemoteNotificationsWithDeviceToken:))
+    let declaredToken = app.delegate?.responds(to: tokenSelector) ?? true
+
     // Always swizzle: otherwise the host AppDelegate must forward APNs callbacks.
     AppPushService.initialize(debug: false, swizzle: true)
+
+    // UIKit caches which callbacks the delegate implements when it is assigned, so the
+    // APNs methods the swizzle just added are never called unless the AppDelegate already
+    // declared them. Reassigning the delegate makes UIKit check again (as Firebase does).
+    // The token arrives asynchronously, so doing this right after initialize() is in time.
+    if !declaredToken, let delegate = app.delegate {
+      app.delegate = nil
+      app.delegate = delegate
+    }
+
     registerListeners()
   }
 
@@ -137,13 +163,13 @@ public class AppsonairReactNativeApppushImpl: NSObject {
       // Normally already done at launch.
       self.initializeSDK()
 
-      // The SDK started with debug off, so apply it now (without overriding a level already set).
-      if debug && AppPushService.Debug.logLevel == .none {
+      // The SDK started with debug off, so raise it now (never lowering a more verbose level).
+      if debug && AppPushService.Debug.logLevel < .debug {
         AppPushService.Debug.setLogLevel(.debug)
       }
 
       self.jsInitialized = true
-      self.flushPendingOpened()
+      self.flushPending()
 
       resolve(nil)
     }
@@ -564,9 +590,16 @@ extension AppsonairReactNativeApppushImpl: PushListener {
     case .notInitialized:         code = "notInitialized"
     case .permissionDenied:       code = "permissionDenied"
     case .apnsRegistrationFailed: code = "tokenRegistrationFailed"
+    case .apnsCallbackNotReceived: code = "apnsCallbackNotReceived"
     case .unknown:                code = "unknown"
     }
-    emit(Event.error, ["code": code, "message": error.message])
+    let body: [String: Any] = ["code": code, "message": error.message]
+    if jsInitialized && jsListening {
+      emit(Event.error, body)
+    } else {
+      pendingErrors.append(body)
+      if pendingErrors.count > Self.maxPendingErrors { pendingErrors.removeFirst() }
+    }
   }
 }
 
@@ -579,7 +612,7 @@ extension AppsonairReactNativeApppushImpl: NotificationClickListener {
     ]
     // Held until JS is ready (sent immediately if it already is).
     pendingOpened.append(body)
-    flushPendingOpened()
+    flushPending()
   }
 }
 

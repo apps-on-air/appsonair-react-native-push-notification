@@ -49,21 +49,42 @@ jobs:
             exit 1
           fi
 
-      # npm does NOT infer a dist-tag from a prerelease version: without this,
-      # 0.0.1-alpha would install for everyone running `npm i appsonair-react-native-apppush`.
-      - name: 🏷️ resolve the dist-tag
+      # A prerelease is published under its channel tag (alpha/beta), since npm
+      # does not infer one from the version. While no stable version exists it
+      # also moves `latest`: the npm landing page and a bare `npm i` both follow
+      # `latest`, and leaving it on the first ever publish (0.0.1-alpha) showed
+      # a stale version there. Once a stable release ships, prereleases stop
+      # touching `latest`.
+      - name: 🏷️ resolve the dist-tags
         id: disttag
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
           case "$VERSION" in
-            *-*) TAG=$(echo "$VERSION" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+-([a-zA-Z]+).*$/\1/') ;;
-            *)   TAG=latest ;;
+            *-*)
+              CHANNEL=$(echo "$VERSION" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+-([a-zA-Z]+).*$/\1/')
+              STABLE=$(npm view "$NAME" versions --json 2>/dev/null \
+                | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const v=s.trim()?JSON.parse(s):[];console.log([].concat(v).some(x=>typeof x==='string'&&!x.includes('-')))})")
+              if [ "$STABLE" = "true" ]; then MOVE_LATEST=false; else MOVE_LATEST=true; fi
+              ;;
+            *)
+              CHANNEL=latest
+              MOVE_LATEST=false
+              ;;
           esac
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "publishing $VERSION under dist-tag '$TAG'"
+          echo "tag=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "move_latest=$MOVE_LATEST" >> "$GITHUB_OUTPUT"
+          echo "publishing $VERSION under dist-tag '$CHANNEL' (also latest: $MOVE_LATEST)"
 
       - name: 🚀 publish
         run: npm publish --access public --tag ${{ steps.disttag.outputs.tag }} --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+      - name: 🏷️ point latest at this version
+        if: steps.disttag.outputs.move_latest == 'true'
+        run: npm dist-tag add "${{ steps.disttag.outputs.name }}@${{ steps.disttag.outputs.version }}" latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}

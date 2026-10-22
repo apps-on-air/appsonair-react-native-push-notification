@@ -116,21 +116,10 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     guard !sdkInitialized else { return }
     sdkInitialized = true
 
-    let app = UIApplication.shared
-    let tokenSelector = #selector(UIApplicationDelegate.application(_:didRegisterForRemoteNotificationsWithDeviceToken:))
-    let declaredToken = app.delegate?.responds(to: tokenSelector) ?? true
-
     // Always swizzle: otherwise the host AppDelegate must forward APNs callbacks.
+    // The SDK also reassigns UIApplication.delegate so UIKit calls the methods it adds;
+    // don't repeat that here.
     AppPushService.initialize(debug: false, swizzle: true)
-
-    // UIKit caches which callbacks the delegate implements when it is assigned, so the
-    // APNs methods the swizzle just added are never called unless the AppDelegate already
-    // declared them. Reassigning the delegate makes UIKit check again (as Firebase does).
-    // The token arrives asynchronously, so doing this right after initialize() is in time.
-    if !declaredToken, let delegate = app.delegate {
-      app.delegate = nil
-      app.delegate = delegate
-    }
 
     registerListeners()
   }

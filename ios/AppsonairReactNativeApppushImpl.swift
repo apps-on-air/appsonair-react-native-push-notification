@@ -509,8 +509,11 @@ public class AppsonairReactNativeApppushImpl: NSObject {
       case let string as String: out[key] = string
       case let number as NSNumber: out[key] = number.stringValue
       default:
-        // Objects and arrays survive as JSON so no payload key is silently lost.
-        if let data = try? JSONSerialization.data(withJSONObject: value),
+        // Objects and arrays survive as JSON so no payload key is silently lost. Anything
+        // else (NSNull for a JSON null) makes JSONSerialization raise an ObjC exception
+        // that try? can't catch, crashing the app, so it is skipped.
+        if JSONSerialization.isValidJSONObject(value),
+           let data = try? JSONSerialization.data(withJSONObject: value),
            let json = String(data: data, encoding: .utf8) {
           out[key] = json
         }

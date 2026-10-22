@@ -79,7 +79,7 @@ iOS only shows images and attachments if a **Notification Service Extension**
 
    ```ruby
    target 'NotificationService' do
-     pod 'AppsOnAir-AppPush-ServiceExt', '1.0.7-beta'
+     pod 'AppsOnAir-AppPush-ServiceExt', '1.0.8-beta'
    end
    ```
 
@@ -422,7 +422,7 @@ to the standalone pod and update the import in `NotificationService.swift`:
 ```diff
  target 'NotificationService' do
 -  pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.5-beta'
-+  pod 'AppsOnAir-AppPush-ServiceExt', '1.0.7-beta'
++  pod 'AppsOnAir-AppPush-ServiceExt', '1.0.8-beta'
  end
 ```
 

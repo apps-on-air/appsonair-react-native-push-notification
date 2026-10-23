@@ -115,7 +115,12 @@ export interface Spec extends TurboModule {
 
   // MARK: Test device
 
+  /**
+   * @deprecated Being retired: from Android SDK 1.0.8-beta it's no longer sent and
+   * setting it has no effect. iOS still sends it. Not exposed in index.tsx; keep it out.
+   */
   setTestDevice(enabled: boolean): Promise<void>;
+  /** @deprecated See {@link Spec.setTestDevice}. */
   isTestDevice(): Promise<boolean>;
 
   // MARK: Background sync

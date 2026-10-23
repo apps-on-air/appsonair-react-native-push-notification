@@ -116,21 +116,10 @@ public class AppsonairReactNativeApppushImpl: NSObject {
     guard !sdkInitialized else { return }
     sdkInitialized = true
 
-    let app = UIApplication.shared
-    let tokenSelector = #selector(UIApplicationDelegate.application(_:didRegisterForRemoteNotificationsWithDeviceToken:))
-    let declaredToken = app.delegate?.responds(to: tokenSelector) ?? true
-
     // Always swizzle: otherwise the host AppDelegate must forward APNs callbacks.
+    // The SDK also reassigns UIApplication.delegate so UIKit calls the methods it adds;
+    // don't repeat that here.
     AppPushService.initialize(debug: false, swizzle: true)
-
-    // UIKit caches which callbacks the delegate implements when it is assigned, so the
-    // APNs methods the swizzle just added are never called unless the AppDelegate already
-    // declared them. Reassigning the delegate makes UIKit check again (as Firebase does).
-    // The token arrives asynchronously, so doing this right after initialize() is in time.
-    if !declaredToken, let delegate = app.delegate {
-      app.delegate = nil
-      app.delegate = delegate
-    }
 
     registerListeners()
   }
@@ -520,8 +509,11 @@ public class AppsonairReactNativeApppushImpl: NSObject {
       case let string as String: out[key] = string
       case let number as NSNumber: out[key] = number.stringValue
       default:
-        // Objects and arrays survive as JSON so no payload key is silently lost.
-        if let data = try? JSONSerialization.data(withJSONObject: value),
+        // Objects and arrays survive as JSON so no payload key is silently lost. Anything
+        // else (NSNull for a JSON null) makes JSONSerialization raise an ObjC exception
+        // that try? can't catch, crashing the app, so it is skipped.
+        if JSONSerialization.isValidJSONObject(value),
+           let data = try? JSONSerialization.data(withJSONObject: value),
            let json = String(data: data, encoding: .utf8) {
           out[key] = json
         }

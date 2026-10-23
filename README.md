@@ -5,7 +5,7 @@ one JavaScript API. Works on both the New and the Old Architecture with no code
 changes.
 
 > [!WARNING]
-> **Beta** `1.0.6-beta` is intended for evaluation and
+> **Beta** `1.0.7-beta` is intended for evaluation and
 > internal test builds. The API may change between releases, so pin the exact
 > version and re-test on every upgrade.
 
@@ -32,7 +32,7 @@ changes.
 ## Installation
 
 ```sh
-npm install appsonair-react-native-apppush@1.0.6-beta
+npm install appsonair-react-native-apppush@1.0.7-beta
 cd ios && pod install
 ```
 
@@ -79,7 +79,7 @@ iOS only shows images and attachments if a **Notification Service Extension**
 
    ```ruby
    target 'NotificationService' do
-     pod 'AppsOnAir-AppPush-ServiceExt', '1.0.7-beta'
+     pod 'AppsOnAir-AppPush-ServiceExt', '1.0.8-beta'
    end
    ```
 
@@ -422,7 +422,7 @@ to the standalone pod and update the import in `NotificationService.swift`:
 ```diff
  target 'NotificationService' do
 -  pod 'AppsOnAir-AppPush/ServiceExtension', '1.0.5-beta'
-+  pod 'AppsOnAir-AppPush-ServiceExt', '1.0.7-beta'
++  pod 'AppsOnAir-AppPush-ServiceExt', '1.0.8-beta'
  end
 ```
 
